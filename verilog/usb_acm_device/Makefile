@@ -1,10 +1,11 @@
 PROJ=usb_acm_device
 TOP_MODULE=usb_acm_device
+.PRECIOUS: $(PROJ).ys $(PROJ).svf $(PROJ).bit $(PROJ)_out.config $(PROJ).json $(PROJ).vcd
 
 # Specify hardware revision of your OrangeCrab: `r0.1` or `r0.2` or `r0.2.1`
 VERSION:=r0.2.1
 # `25F` or `85F`
-DENSITY=25F
+DENSITY=85F
 
 ifneq (,$(findstring 85,$(DENSITY)))
 	NEXTPNR_DENSITY:=--85k
@@ -70,6 +71,7 @@ dfu: $(PROJ).dfu
 	$(foreach V,$(VERILOG_FILES),$(file >>$@,read_verilog $V))
 	$(file >>$@,synth_ecp5 -top $(TOP_MODULE)) \
 	$(file >>$@,write_json "$(basename $@).json") \
+	$(file >>$@,stat) \
 	
 	
 # Run the yosys script to synthasize the logic and netlist (in json format)
@@ -89,8 +91,9 @@ dfu: $(PROJ).dfu
 %.dfu : %.bit
 	$(COPY) $< $@
 	dfu-suffix -v 1209 -p 5af0 -a $@
+	echo "############################################"
 
 clean:
-	$(RM) -f $(PROJ).svf $(PROJ).bit $(PROJ)_out.config $(PROJ).json $(PROJ).dfu $(PROJ).vcd
+	 $(RM) -f $(PROJ).svf $(PROJ).bit $(PROJ)_out.config $(PROJ).json $(PROJ).dfu $(PROJ).vcd
 
-.PHONY: sim clean
+#.PHONY: sim clean
