@@ -1,0 +1,17 @@
+read_verilog blocks/usbserial/usb/edge_detect.v
+read_verilog blocks/usbserial/usb/serial.v
+read_verilog blocks/usbserial/usb/usb_fs_in_arb.v
+read_verilog blocks/usbserial/usb/usb_fs_in_pe.v
+read_verilog blocks/usbserial/usb/usb_fs_out_arb.v
+read_verilog blocks/usbserial/usb/usb_fs_out_pe.v
+read_verilog blocks/usbserial/usb/usb_fs_pe.v
+read_verilog blocks/usbserial/usb/usb_fs_rx.v
+read_verilog blocks/usbserial/usb/usb_fs_tx_mux.v
+read_verilog blocks/usbserial/usb/usb_fs_tx.v
+read_verilog blocks/usbserial/usb/usb_reset_det.v
+read_verilog blocks/usbserial/usb/usb_serial_ctrl_ep.v
+read_verilog blocks/usbserial/usb/usb_uart_bridge_ep.v
+read_verilog blocks/usbserial/usb/usb_uart_core.v
+read_verilog usb_acm_device.v
+prep -top usb_acm_device
+sim -n 200 -clock clk48 -vcd test.vcd
