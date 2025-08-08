@@ -12,6 +12,31 @@ assign res_i = 2*zr*zi + ci;
 
 endmodule
 
+
+module sr_ff(
+    output wire q,
+    input wire r,
+    input wire s
+);
+
+//always @ (s, r)
+always @ (posedge clk48)
+begin
+       case({s,r})
+            2'b00:
+                q <= q;
+            2'b01:
+                q <= 0;
+            2'b10:
+                q <= 1;
+            2'b11:
+                q <= 1'bx;
+            default:
+                q <= q;
+        endcase
+    end
+endmodule
+
 /*
  *  Create USB device on the OrangeCrab using verilog
  */
@@ -30,40 +55,56 @@ module usb_acm_device (
     );
 
     // Mandelbrot input registers
-    reg [15:0] cr;
+    reg [15:0] cr = 16'hFFFF;
     reg [15:0] ci;
     // reg [7:0] reg2;
     // reg [7:0] reg3;
     reg [31:0] out_reg;
     reg [2:0] reg_counter = 0;
     reg [15:0] zr = 0, zi = 0;
-    f_iter f(.zr(zr), .zi(zi), .cr(cr), .ci(ci), .res_r(out_reg[31:16]), .res_i(out_reg[15:0]));
+    // f_iter f(.zr(zr), .zi(zi), .cr(cr), .ci(ci), .res_r(out_reg[31:16]), .res_i(out_reg[15:0]));
 
-    // Getting an extra character at the start of a burst 
-    always @(negedge clk48) begin
+    // Getting an extra character at the start of a burst
+    always @(posedge clk48) begin
           if ((uart_in_valid == 1) && (uart_in_ready == 1)) begin
             case (reg_counter)
-                3'd0 : begin cr[15:8] <= uart_out_data; uart_in_data <= uart_out_data; end
-                3'd1 : begin cr[7:0] <= uart_out_data; uart_in_data <= uart_out_data; end
-                3'd2 : begin ci[15:8] <= uart_out_data; uart_in_data <= uart_out_data; end
-                3'd3 : begin ci[7:0] <= uart_out_data; uart_in_data <= uart_out_data; end
+                3'd0 : begin cr[15:8] <= uart_out_data; out_running_set <= 0; end
+                3'd1 : begin cr[7:0] <= uart_out_data; end
+                3'd2 : begin ci[15:8] <= uart_out_data; end
+                3'd3 : begin ci[7:0] <= uart_out_data; end
                 // The multiplier can't keep up so the highest byte is sent a full `always` cycle later
-                3'd4 : begin
-                    uart_in_data <= out_reg[31:24];
-                end
-//                3'd5 : uart_in_data <= out_reg[31:24];
-                3'd5 : uart_in_data <= out_reg[23:16];
-                3'd6 : uart_in_data <= out_reg[15:8];
+                3'd4 : begin out_reg[31:24] <= uart_out_data; end
+                3'd5 : out_reg[23:16] <= uart_in_data;
+                3'd6 : out_reg[15:8] <= uart_in_data;
                 3'd7 : begin
-                    uart_in_data <= out_reg[7:0];
-                    zr <= out_reg[31:16];
-                    zi <= out_reg[15:0];
-                end;
-            endcase 
-            reg_counter <= reg_counter + 1;
+                        out_reg[7:0] <= uart_in_data;
+                        out_running_set <= 1;
+                    end
+            endcase
+            if (uart_out_valid && !out_running_q) begin
+                reg_counter <= reg_counter + 1;
+            end
         end
     end
-        
+
+    reg [2:0] out_counter = 0;
+
+    sr_ff out_running (.q(out_running_q), .r(out_running_reset), .s(out_running_set));
+    always @(posedge clk48) begin
+            case (out_counter)
+                3'd0 : begin uart_in_data <= cr[15:8]; uart_in_valid = 1; out_running_reset <= 0; end
+                3'd1 : begin uart_in_data <= cr[7:0]; end
+                3'd2 : begin uart_in_data <= ci[15:8]; end
+                3'd3 : begin uart_in_data <= ci[7:0]; end
+                3'd4 : begin uart_in_data <= out_reg[31:24]; end
+                3'd5 : uart_in_data <= out_reg[23:16];
+                3'd6 : uart_in_data <= out_reg[15:8];
+                3'd7 : begin uart_in_data <= out_reg[7:0]; out_running_reset <= 1; uart_in_valid <= 0; end
+            endcase
+            if (uart_in_ready && out_running_q) begin
+                out_counter <= out_counter + 1;
+            end
+    end
 
     wire clk48;
 
@@ -96,6 +137,8 @@ module usb_acm_device (
     // assign uart_out_data = uart_in_data;
     wire uart_in_valid;
     wire uart_in_ready;
+    wire uart_out_valid;
+    wire uart_out_ready = 1;
 
 
     wire usb_p_in;
@@ -125,8 +168,8 @@ module usb_acm_device (
         .uart_in_ready( uart_in_ready ),
 
         .uart_out_data( uart_out_data ),
-        .uart_out_valid( uart_in_valid ),
-        .uart_out_ready( uart_in_ready  )
+        .uart_out_valid( uart_out_valid ),
+        .uart_out_ready( uart_out_ready  )
     );
 
     // USB Host Detect Pull Up

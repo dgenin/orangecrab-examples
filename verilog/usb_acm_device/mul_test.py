@@ -4,6 +4,9 @@ import struct
 import time
 
 ser = serial.Serial('/dev/ttyACM0', timeout=1)
+p = ser.read(100)
+print(list(map(hex, p)))
+
 while True:
     a = int(input("> a="))
     b = int(input("> b="))
