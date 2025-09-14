@@ -13,30 +13,6 @@ assign res_i = 2*zr*zi + ci;
 endmodule
 
 
-module sr_ff(
-    output wire q,
-    input wire r,
-    input wire s
-);
-
-//always @ (s, r)
-always @ (posedge clk48)
-begin
-       case({s,r})
-            2'b00:
-                q <= q;
-            2'b01:
-                q <= 0;
-            2'b10:
-                q <= 1;
-            2'b11:
-                q <= 1'bx;
-            default:
-                q <= q;
-        endcase
-    end
-endmodule
-
 /*
  *  Create USB device on the OrangeCrab using verilog
  */
@@ -62,48 +38,57 @@ module usb_acm_device (
     reg [31:0] out_reg;
     reg [2:0] reg_counter = 0;
     reg [15:0] zr = 0, zi = 0;
+    reg data_valid = 0, data_ready = 0;
     // f_iter f(.zr(zr), .zi(zi), .cr(cr), .ci(ci), .res_r(out_reg[31:16]), .res_i(out_reg[15:0]));
 
     // Getting an extra character at the start of a burst
+    // Producer aka data gatherer
     always @(posedge clk48) begin
-          if ((uart_in_valid == 1) && (uart_in_ready == 1)) begin
+        if (data_valid) begin
+            data_valid <= 0;
+        end;
+        if (uart_out_valid) begin
             case (reg_counter)
-                3'd0 : begin cr[15:8] <= uart_out_data; out_running_set <= 0; end
+                3'd0 : begin cr[15:8] <= uart_out_data; end
                 3'd1 : begin cr[7:0] <= uart_out_data; end
                 3'd2 : begin ci[15:8] <= uart_out_data; end
                 3'd3 : begin ci[7:0] <= uart_out_data; end
-                // The multiplier can't keep up so the highest byte is sent a full `always` cycle later
                 3'd4 : begin out_reg[31:24] <= uart_out_data; end
-                3'd5 : out_reg[23:16] <= uart_in_data;
-                3'd6 : out_reg[15:8] <= uart_in_data;
+                3'd5 : out_reg[23:16] <= uart_out_data;
+                3'd6 : out_reg[15:8] <= uart_out_data;
                 3'd7 : begin
-                        out_reg[7:0] <= uart_in_data;
-                        out_running_set <= 1;
+                        out_reg[7:0] <= uart_out_data;
+                        data_valid <= 1;
                     end
             endcase
-            if (uart_out_valid && !out_running_q) begin
-                reg_counter <= reg_counter + 1;
-            end
+            reg_counter <= reg_counter + 1;
         end
     end
 
-    reg [2:0] out_counter = 0;
+    reg [3:0] out_counter = 4'd9;
 
-    sr_ff out_running (.q(out_running_q), .r(out_running_reset), .s(out_running_set));
+    // Consumer
     always @(posedge clk48) begin
+        // if (uart_in_ready && (out_counter < 4'd8)) begin
+        if (out_counter > 4'd8) begin
+            if (data_valid) begin
+                out_counter <= 0;
+            end;
+        end
+        else begin
             case (out_counter)
-                3'd0 : begin uart_in_data <= cr[15:8]; uart_in_valid = 1; out_running_reset <= 0; end
-                3'd1 : begin uart_in_data <= cr[7:0]; end
-                3'd2 : begin uart_in_data <= ci[15:8]; end
-                3'd3 : begin uart_in_data <= ci[7:0]; end
-                3'd4 : begin uart_in_data <= out_reg[31:24]; end
-                3'd5 : uart_in_data <= out_reg[23:16];
-                3'd6 : uart_in_data <= out_reg[15:8];
-                3'd7 : begin uart_in_data <= out_reg[7:0]; out_running_reset <= 1; uart_in_valid <= 0; end
-            endcase
-            if (uart_in_ready && out_running_q) begin
-                out_counter <= out_counter + 1;
-            end
+                4'd0 : begin uart_in_data <= 8'h41 /*cr[15:8]*/; uart_in_valid <= 1; end
+                4'd1 : begin uart_in_data <= cr[7:0]; end
+                4'd2 : begin uart_in_data <= ci[15:8]; end
+                4'd3 : begin uart_in_data <= ci[7:0]; end
+                4'd4 : begin uart_in_data <= out_reg[31:24]; end
+                4'd5 : uart_in_data <= out_reg[23:16];
+                4'd6 : uart_in_data <= out_reg[15:8];
+                4'd7 : begin uart_in_data <= out_reg[7:0]; end
+                4'd8 : begin uart_in_valid <= 0; uart_in_data <= 8'd10; end
+            endcase;
+            out_counter <= out_counter + 1;
+        end;
     end
 
     wire clk48;
@@ -111,16 +96,17 @@ module usb_acm_device (
     // Tying this to 0 causes reg_counter [0] to be 0 because of the assignment on line 52
     // assign rgb_led0_r = 0;
     // assign rgb_led0_b = 1;
-    assign rgb_led0_g = 1;
+    // assign rgb_led0_g = 1;
 
     // LED
     reg [22:0] ledCounter;
     always @(posedge clk48) begin
         ledCounter <= ledCounter + 1;
     end
-    // assign rgb_led0_g = ~ledCounter[ 22 ];
-    assign rgb_led0_r = ~reg_counter[ 0 ];
-    assign rgb_led0_b = ~reg_counter[ 1 ];
+    // Why is uart_in_ready always low???
+    assign rgb_led0_g = ~data_valid;
+    assign rgb_led0_r = ~out_counter[ 1 ];
+    assign rgb_led0_b = ~out_counter[ 2 ];
 
     // Generate reset signal
     reg [5:0] reset_cnt = 0;
