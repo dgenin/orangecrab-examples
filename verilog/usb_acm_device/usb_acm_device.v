@@ -4,13 +4,33 @@ module f_iter(
          input wire [15:0] cr,
          input wire [15:0] ci,
          output reg [15:0] res_r,
-         output reg [15:0] res_i);
+         output reg [15:0] res_i,
+         inout wire start_iter,
+         inout wire data_valid);
 //         output reg valid);
 
-assign res_r = zr*zr - zi*zi + cr;
-assign res_i = 2*zr*zi + ci;
+    reg [7:0] iter_counter = 0;
+
+    always @(posedge clk48) begin
+        if (start_iter) begin
+            start_iter <= 0;
+            iter_counter <= 1;
+        end;
+        if (iter_counter > 0) begin
+//            res_r <= zr*zr - zi*zi + cr;
+//            res_i <= 2*zr*zi + ci;
+            res_r <= 16'h4142;
+            res_i <= 16'h4344;
+            iter_counter <= iter_counter - 1;
+        end
+        else begin
+            // data_valid <= 1;
+        end;
+    end
+
 
 endmodule
+
 
 
 /*
@@ -35,29 +55,29 @@ module usb_acm_device (
     reg [15:0] ci;
     // reg [7:0] reg2;
     // reg [7:0] reg3;
-    reg [31:0] out_reg;
+    reg [15:0] res_r, res_i;
     reg [2:0] reg_counter = 0;
     reg [15:0] zr = 0, zi = 0;
     reg data_valid = 0, data_ready = 0;
-    // f_iter f(.zr(zr), .zi(zi), .cr(cr), .ci(ci), .res_r(out_reg[31:16]), .res_i(out_reg[15:0]));
+    reg start_iter = 0;
 
-    // Getting an extra character at the start of a burst
-    // Producer aka data gatherer
+    // Reader
     always @(posedge clk48) begin
-        if (data_valid) begin
-            data_valid <= 0;
-        end;
+//        if (start_iter) begin
+//            start_iter <= 0;
+//        end;
         if (uart_out_valid) begin
             case (reg_counter)
-                3'd0 : begin cr[15:8] <= uart_out_data; end
-                3'd1 : begin cr[7:0] <= uart_out_data; end
-                3'd2 : begin ci[15:8] <= uart_out_data; end
-                3'd3 : begin ci[7:0] <= uart_out_data; end
-                3'd4 : begin out_reg[31:24] <= uart_out_data; end
-                3'd5 : out_reg[23:16] <= uart_out_data;
-                3'd6 : out_reg[15:8] <= uart_out_data;
+                3'd0 : cr[15:8] <= uart_out_data;
+                3'd1 : cr[7:0] <= uart_out_data;
+                3'd2 : ci[15:8] <= uart_out_data;
+                3'd3 : ci[7:0] <= uart_out_data;
+                3'd4 : res_r[15:8] <= uart_out_data;
+                3'd5 : res_r[7:0] <= uart_out_data;
+                3'd6 : res_i[15:8] <= uart_out_data;
                 3'd7 : begin
-                        out_reg[7:0] <= uart_out_data;
+                        res_i[7:0] <= uart_out_data;
+                        start_iter <= 1;
                         data_valid <= 1;
                     end
             endcase
@@ -65,30 +85,39 @@ module usb_acm_device (
         end
     end
 
+    f_iter mandel_iter (.zr(zr), .zi(zi), .cr(cr), .ci(ci), .res_r(res_r), .res_i(res_i), .start_iter(start_iter), .data_valid(data_valid));
+
     reg [3:0] out_counter = 4'd9;
+    reg [5:0] data_valid_counter = 0;
 
     // Consumer
     always @(posedge clk48) begin
+        // What is the deal with uart_in_ready? It doesn't ever appear to go high.
         // if (uart_in_ready && (out_counter < 4'd8)) begin
         if (out_counter > 4'd8) begin
             if (data_valid) begin
+                // data_valid <= 0;
                 out_counter <= 0;
             end;
         end
         else begin
             case (out_counter)
-                4'd0 : begin uart_in_data <= 8'h41 /*cr[15:8]*/; uart_in_valid <= 1; end
-                4'd1 : begin uart_in_data <= cr[7:0]; end
-                4'd2 : begin uart_in_data <= ci[15:8]; end
-                4'd3 : begin uart_in_data <= ci[7:0]; end
-                4'd4 : begin uart_in_data <= out_reg[31:24]; end
-                4'd5 : uart_in_data <= out_reg[23:16];
-                4'd6 : uart_in_data <= out_reg[15:8];
-                4'd7 : begin uart_in_data <= out_reg[7:0]; end
+                4'd0 : begin uart_in_data <= cr[15:8]; uart_in_valid <= 1; end
+                4'd1 : uart_in_data <= cr[7:0];
+                4'd2 : uart_in_data <= ci[15:8];
+                4'd3 : uart_in_data <= ci[7:0];
+                4'd4 : uart_in_data <= res_r[15:8];
+                4'd5 : uart_in_data <= res_r[7:0];
+                4'd6 : uart_in_data <= res_i[15:8];
+                4'd7 : uart_in_data <= res_i[7:0];
                 4'd8 : begin uart_in_valid <= 0; uart_in_data <= 8'd10; end
             endcase;
-            out_counter <= out_counter + 1;
+            if (uart_in_ready && uart_in_valid) begin
+                out_counter <= out_counter + 1;
+            end;
         end;
+        if (data_valid) begin data_valid_counter <= data_valid_counter + 1; end;
+//        if (data_valid_counter > 60) begin data_valid <= 0; data_valid_counter <= 0; end; 
     end
 
     wire clk48;
@@ -105,7 +134,7 @@ module usb_acm_device (
     end
     // Why is uart_in_ready always low???
     assign rgb_led0_g = ~data_valid;
-    assign rgb_led0_r = ~out_counter[ 1 ];
+    assign rgb_led0_r = ~start_iter;
     assign rgb_led0_b = ~out_counter[ 2 ];
 
     // Generate reset signal
