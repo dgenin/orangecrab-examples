@@ -12,6 +12,7 @@ read_verilog blocks/usbserial/usb/usb_reset_det.v
 read_verilog blocks/usbserial/usb/usb_serial_ctrl_ep.v
 read_verilog blocks/usbserial/usb/usb_uart_bridge_ep.v
 read_verilog blocks/usbserial/usb/usb_uart_core.v
+read_verilog mandelbrot_uut.v
 read_verilog usb_acm_device.v
 synth_ecp5 -top usb_acm_device
 write_json "usb_acm_device.json"

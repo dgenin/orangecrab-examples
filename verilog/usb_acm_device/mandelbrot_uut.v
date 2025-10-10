@@ -1,0 +1,136 @@
+module f_iter(
+         input wire clk48,
+         input wire [15:0] zr,
+         input wire [15:0] zi,
+         input wire [15:0] cr,
+         input wire [15:0] ci,
+         inout reg [15:0] res_r = 0,
+         inout reg [15:0] res_i = 0,
+         input wire start_iter,
+         output reg data_valid = 0);
+
+    reg [7:0] iter_counter = 0;
+
+    always @(posedge clk48) begin
+        if (start_iter) begin
+            iter_counter <= 10;
+            res_r <= z_r;
+            res_i <= z_i;
+        end;
+        case (iter_counter)         
+            8'd1 : begin data_valid <= 1; iter_counter <= 0; end
+            8'd0 : data_valid <= 0;
+            default : begin
+                res_r <= res_r*res_r - res_i*res_i + cr;
+                res_i <= 2*res_r*res_i + ci;
+                iter_counter <= iter_counter - 1;
+            end
+        endcase
+    end;
+endmodule
+
+module mandelbrot_uut (
+        input  clk48,
+
+		output uart_out_ready,
+  		input uart_out_valid,
+  		input [7:0] uart_out_data,
+  
+  		output reg uart_in_valid = 0,
+  		input uart_in_ready,
+		output reg [7:0] uart_in_data,
+  	
+        output rgb_led0_r,
+        output rgb_led0_g,
+        output rgb_led0_b
+    );
+  
+	// Code your design here
+    // Mandelbrot input registers
+    reg [15:0] cr = 16'hFFFF;
+    reg [15:0] ci;
+    reg [31:0] out_reg;
+    reg [2:0] reg_counter = 0;
+    reg [15:0] zr = 0, zi = 0;
+    wire [15:0] res_r, res_i;
+    wire data_valid;
+    reg data_ready = 0;
+    reg start_iter = 0;
+
+    f_iter mandel_iter (.clk48(clk48), .zr(zr), .zi(zi), .cr(cr), .ci(ci), .res_r(res_r), .res_i(res_i), .start_iter(start_iter), .data_valid(data_valid));
+
+    // Reader
+    always @(posedge clk48) begin
+        if (start_iter) begin
+            start_iter <= 0;
+        end;
+        if (uart_out_valid) begin
+            case (reg_counter)
+                3'd0 : begin cr[15:8] <= uart_out_data; end
+                3'd1 : begin cr[7:0] <= uart_out_data; end
+                3'd2 : begin ci[15:8] <= uart_out_data; end
+                3'd3 : begin ci[7:0] <= uart_out_data; end
+                3'd4 : begin out_reg[31:24] <= uart_out_data; end
+                3'd5 : out_reg[23:16] <= uart_out_data;
+                3'd6 : out_reg[15:8] <= uart_out_data;
+                3'd7 : begin
+                        out_reg[7:0] <= uart_out_data;
+                        start_iter <= 1;
+                    end
+            endcase
+            reg_counter <= reg_counter + 1;
+        end
+    end
+
+    reg [3:0] out_counter = 4'd9;
+
+    // Consumer
+    always @(posedge clk48) begin
+        // if (uart_in_ready && (out_counter < 4'd8)) begin
+        if (out_counter > 4'd9) begin
+            if (data_valid) begin
+                out_counter <= 0;
+            end;
+        end
+        else begin
+            case (out_counter)
+                4'd0 : begin uart_in_data <= 8'h41 /*cr[15:8]*/; uart_in_valid <= 1; end
+                4'd1 : begin uart_in_data <= cr[7:0]; end
+                4'd2 : begin uart_in_data <= ci[15:8]; end
+                4'd3 : begin uart_in_data <= ci[7:0]; end
+                4'd4 : begin uart_in_data <= out_reg[31:24]; end
+                4'd5 : uart_in_data <= out_reg[23:16];
+                4'd6 : uart_in_data <= out_reg[15:8];
+                4'd7 : begin uart_in_data <= out_reg[7:0]; end
+                4'd8 : begin uart_in_data <= 8'd10; end
+                4'd9 : begin uart_in_valid <= 0; end
+            endcase;
+            out_counter <= out_counter + 1;
+        end;
+    end
+
+    // Tying this to 0 causes reg_counter [0] to be 0 because of the assignment on line 52
+    // assign rgb_led0_r = 0;
+    // assign rgb_led0_b = 1;
+    // assign rgb_led0_g = 1;
+
+    // LED
+    reg [22:0] ledCounter;
+    always @(posedge clk48) begin
+        ledCounter <= ledCounter + 1;
+    end
+    // Why is uart_in_ready always low???
+    assign rgb_led0_g = ~data_valid;
+    assign rgb_led0_r = ~out_counter[ 1 ];
+    assign rgb_led0_b = ~out_counter[ 2 ];
+
+    // Generate reset signal
+    reg [5:0] reset_cnt = 0;
+    wire reset = ~reset_cnt[5];
+    always @(posedge clk48)
+        reset_cnt <= reset_cnt + reset;
+
+    // uart pipeline in
+    assign uart_out_ready = 1;
+  
+endmodule

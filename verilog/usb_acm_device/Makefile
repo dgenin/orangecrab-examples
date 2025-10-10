@@ -29,6 +29,7 @@ VERILOG_FILES=$(RTL_USB_DIR)/edge_detect.v \
 	$(RTL_USB_DIR)/usb_serial_ctrl_ep.v \
 	$(RTL_USB_DIR)/usb_uart_bridge_ep.v \
 	$(RTL_USB_DIR)/usb_uart_core.v \
+	mandelbrot_uut.v \
 	usb_acm_device.v
 
 # Add Windows and Unix support
@@ -96,4 +97,7 @@ dfu: $(PROJ).dfu
 clean:
 	 $(RM) -f $(PROJ).svf $(PROJ).bit $(PROJ)_out.config $(PROJ).json $(PROJ).dfu $(PROJ).vcd
 
+sim: mandelbrot_uut.v mandelbrot_test.v
+	iverilog -o mandelbrot_uut mandelbrot_test.v mandelbrot_uut.v
+	./mandelbrot_uut
 #.PHONY: sim clean
