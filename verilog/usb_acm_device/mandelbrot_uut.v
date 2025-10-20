@@ -1,29 +1,44 @@
 module f_iter(
          input wire clk48,
-         input wire [15:0] zr,
-         input wire [15:0] zi,
-         input wire [15:0] cr,
-         input wire [15:0] ci,
-         inout reg [15:0] res_r = 0,
-         inout reg [15:0] res_i = 0,
+         input wire signed [15:0] cr,
+         input wire signed [15:0] ci,
+         output reg [15:0] iter_counter_out = 0,
          input wire start_iter,
          output reg data_valid = 0);
 
-    reg [7:0] iter_counter = 0;
+    reg signed [31:0] res_r = 0;
+    reg signed [31:0] res_i = 0;
+    reg [31:0] res_r_sqr = 0;
+    reg [31:0] res_i_sqr = 0;
+    reg running = 0;
+    reg [15:0] iter_counter = 0;
 
     always @(posedge clk48) begin
         if (start_iter) begin
-            iter_counter <= 10;
-            res_r <= z_r;
-            res_i <= z_i;
+            iter_counter <= 8'd10;
+            running = 1'b1;
+            res_r <= 0;
+            res_i <= 0;
         end;
-        case (iter_counter)         
+        case (iter_counter)
             8'd1 : begin data_valid <= 1; iter_counter <= 0; end
             8'd0 : data_valid <= 0;
             default : begin
-                res_r <= res_r*res_r - res_i*res_i + cr;
-                res_i <= 2*res_r*res_i + ci;
-                iter_counter <= iter_counter - 1;
+                // Right shift is necessary for fixed point multiplication
+                // Scale is 1/(2**14)
+                res_r_sqr = (res_r*res_r)>>14;
+                res_i_sqr = (res_i*res_i)>>14;
+                // 1<<14 is 1 in fixed point
+                running = ((res_r_sqr + res_i_sqr) <= (1<<14));
+                if (running) begin
+                    // Need to sign extend cr and ci for signed arithmetic to work
+                    res_r <= res_r_sqr - res_i_sqr + { {16{cr[15]}}, cr[15:0] };
+                    res_i <= (((res_r*res_i)>>>13)) + { {16{ci[15]}}, ci[15:0] };
+                    iter_counter <= iter_counter - 1;
+                end else begin
+                    iter_counter_out <= iter_counter;
+                    iter_counter <= 1;
+                end
             end
         endcase
     end;
@@ -47,17 +62,15 @@ module mandelbrot_uut (
   
 	// Code your design here
     // Mandelbrot input registers
-    reg [15:0] cr = 16'hFFFF;
-    reg [15:0] ci;
-    reg [31:0] out_reg;
+    reg signed [15:0] cr = 16'hFFFF;
+    reg signed [15:0] ci;
     reg [2:0] reg_counter = 0;
-    reg [15:0] zr = 0, zi = 0;
-    wire [15:0] res_r, res_i;
+    wire [15:0] iter_counter;
     wire data_valid;
     reg data_ready = 0;
     reg start_iter = 0;
 
-    f_iter mandel_iter (.clk48(clk48), .zr(zr), .zi(zi), .cr(cr), .ci(ci), .res_r(res_r), .res_i(res_i), .start_iter(start_iter), .data_valid(data_valid));
+    f_iter mandel_iter (.clk48(clk48), .cr(cr), .ci(ci), .start_iter(start_iter), .data_valid(data_valid), .iter_counter_out(iter_counter));
 
     // Reader
     always @(posedge clk48) begin
@@ -70,11 +83,10 @@ module mandelbrot_uut (
                 3'd1 : begin cr[7:0] <= uart_out_data; end
                 3'd2 : begin ci[15:8] <= uart_out_data; end
                 3'd3 : begin ci[7:0] <= uart_out_data; end
-                3'd4 : begin out_reg[31:24] <= uart_out_data; end
-                3'd5 : out_reg[23:16] <= uart_out_data;
-                3'd6 : out_reg[15:8] <= uart_out_data;
+                3'd4 : begin end
+                3'd5 : begin end
+                3'd6 : begin end
                 3'd7 : begin
-                        out_reg[7:0] <= uart_out_data;
                         start_iter <= 1;
                     end
             endcase
@@ -94,15 +106,15 @@ module mandelbrot_uut (
         end
         else begin
             case (out_counter)
-                4'd0 : begin uart_in_data <= 8'h41 /*cr[15:8]*/; uart_in_valid <= 1; end
+                4'd0 : begin uart_in_data <= cr[15:8]; uart_in_valid <= 1; end
                 4'd1 : begin uart_in_data <= cr[7:0]; end
                 4'd2 : begin uart_in_data <= ci[15:8]; end
                 4'd3 : begin uart_in_data <= ci[7:0]; end
-                4'd4 : begin uart_in_data <= out_reg[31:24]; end
-                4'd5 : uart_in_data <= out_reg[23:16];
-                4'd6 : uart_in_data <= out_reg[15:8];
-                4'd7 : begin uart_in_data <= out_reg[7:0]; end
-                4'd8 : begin uart_in_data <= 8'd10; end
+                4'd4 : begin uart_in_data <= iter_counter[15:8]; end
+                4'd5 : uart_in_data <= iter_counter[7:0];
+                4'd6 : uart_in_data <= 8'd0;
+                4'd7 : begin uart_in_data <= 8'd0; end
+                4'd8 : begin uart_in_data <= 8'd0; end
                 4'd9 : begin uart_in_valid <= 0; end
             endcase;
             out_counter <= out_counter + 1;

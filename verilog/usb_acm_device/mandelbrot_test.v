@@ -18,22 +18,22 @@ module mandelbrot_test();
     initial begin
         $dumpfile("dump.vcd"); $dumpvars;
         #10
-        uart_out_data = 8'h41;
         uart_out_valid = 1'b1;
+        uart_out_data = 8'h00;
         #2
-        uart_out_data = 8'h42;
+        uart_out_data = 8'h00;
         #2
-        uart_out_data = 8'h43;
+        uart_out_data = 8'h20;
         #2
-        uart_out_data = 8'h44;
+        uart_out_data = 8'h00;
         #2
-        uart_out_data = 8'h45;
+        uart_out_data = 8'h0;
         #2
-        uart_out_data = 8'h46;
+        uart_out_data = 8'h0;
         #2
-        uart_out_data = 8'h47;
+        uart_out_data = 8'h0;
         #2
-        uart_out_data = 8'h48;
+        uart_out_data = 8'h0;
         #2
         uart_out_valid = 1'b0;
         #1000

@@ -44,10 +44,10 @@ module handshake_test ();
         if (reset) begin
             data_ready <= 1'b1;
         end else begin
+            // if (data_valid) begin
+            //     data_ready <= 1'b0;
+            // end
             if (data_valid) begin
-                data_ready <= 1'b0;
-            end
-            if (data_valid & ~(data_ready)) begin
                 internal_data <= data;
                 data_ready <= 1'b1;
             end
