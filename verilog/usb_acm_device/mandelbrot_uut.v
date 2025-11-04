@@ -6,10 +6,10 @@ module f_iter(
          input wire start_iter,
          output reg data_valid = 0);
 
-    reg signed [31:0] res_r = 0;
-    reg signed [31:0] res_i = 0;
-    reg [31:0] res_r_sqr = 0;
-    reg [31:0] res_i_sqr = 0;
+    reg signed [15:0] res_r = 0;
+    reg signed [15:0] res_i = 0;
+    reg [15:0] res_r_sqr = 0;
+    reg [15:0] res_i_sqr = 0;
     reg running = 0;
     reg [15:0] iter_counter = 0;
 
@@ -26,14 +26,19 @@ module f_iter(
             default : begin
                 // Right shift is necessary for fixed point multiplication
                 // Scale is 1/(2**14)
-                res_r_sqr = (res_r*res_r)>>14;
-                res_i_sqr = (res_i*res_i)>>14;
+                // Expression in curlies "manually" sign-extend the arguments in the expression
+                // to ensure there are enough bits in the result to get the significant digits.
+                // >>> is sign-extended right-shift, which is necessary to get the right sign.
+                res_r_sqr = ({ {16{res_r[15]}}, res_r[15:0] }*{ {16{res_r[15]}}, res_r[15:0] })>>>14;
+                res_i_sqr = ({ {16{res_i[15]}}, res_i[15:0] }*{ {16{res_i[15]}}, res_i[15:0] })>>>14;
                 // 1<<14 is 1 in fixed point
-                running = ((res_r_sqr + res_i_sqr) <= (1<<14));
+                running = ((res_r_sqr + res_i_sqr) <= 16'h4000);
                 if (running) begin
                     // Need to sign extend cr and ci for signed arithmetic to work
                     res_r <= res_r_sqr - res_i_sqr + { {16{cr[15]}}, cr[15:0] };
-                    res_i <= (((res_r*res_i)>>>13)) + { {16{ci[15]}}, ci[15:0] };
+                    // Need to ensure there are enough bits for the result of res_r*res_i, before the right
+                    // shift. Generally, that will be double the bit width of res_r/res_i
+                    res_i <= ((({ {16{res_r[15]}}, res_r[15:0] })*({ {16{res_i[15]}}, res_i[15:0] }))>>>13) + { {16{ci[15]}}, ci[15:0] };
                     iter_counter <= iter_counter - 1;
                 end else begin
                     iter_counter_out <= iter_counter;
