@@ -111,15 +111,15 @@ module mandelbrot_uut (
         end
         else begin
             case (out_counter)
-                4'd0 : begin uart_in_data <= cr[15:8]; uart_in_valid <= 1; end
+                4'd0 : begin uart_in_data <= cr[15:8]; uart_in_valid = 1; end
                 4'd1 : begin uart_in_data <= cr[7:0]; end
                 4'd2 : begin uart_in_data <= ci[15:8]; end
                 4'd3 : begin uart_in_data <= ci[7:0]; end
                 4'd4 : begin uart_in_data <= iter_counter[15:8]; end
                 4'd5 : uart_in_data <= iter_counter[7:0];
                 4'd6 : uart_in_data <= 8'd0;
-                4'd7 : begin uart_in_data <= 8'd0; end
-                4'd8 : begin uart_in_data <= 8'd0; end
+                4'd7 : begin uart_in_data <= 8'd65; end
+                4'd8 : begin uart_in_data <= 8'd66; end
                 4'd9 : begin uart_in_valid <= 0; end
             endcase;
             out_counter <= out_counter + 1;

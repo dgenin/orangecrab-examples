@@ -15,13 +15,43 @@ module usb_acm_device (
         output rgb_led0_b
     );
 
+    wire clk48;
+
+    // assign rgb_led0_r = 0;
+    // assign rgb_led0_b = 0;
+
+    // LED
+    reg [22:0] ledCounter;
+    always @(posedge clk48) begin
+        ledCounter <= ledCounter + 1;
+    end
+    // assign rgb_led0_g = ledCounter[ 22 ];
+
+    // Generate reset signal
+    reg [5:0] reset_cnt = 0;
+    wire reset = ~reset_cnt[5];
+    always @(posedge clk48)
+        reset_cnt <= reset_cnt + reset;
+
+    // uart pipeline in
+    wire [7:0] uart_in_data;
+    wire       uart_in_valid;
+    wire       uart_in_ready;
+
+    wire [7:0] uart_out_data;
+    wire       uart_out_valid;
+    wire       uart_out_ready;
+
     mandelbrot_uut uut (.clk48(clk48),
                     .uart_out_ready(uart_out_ready),
                     .uart_out_valid(uart_out_valid),
                     .uart_out_data(uart_out_data),
                     .uart_in_ready(uart_in_ready),
                     .uart_in_valid(uart_in_valid),
-                    .uart_in_data(uart_in_data));
+                    .uart_in_data(uart_in_data),
+                    .rgb_led0_r(rgb_led0_r),
+                    .rgb_led0_g(rgb_led0_g),
+                    .rgb_led0_b(rgb_led0_b));
 
 
     wire usb_p_in;

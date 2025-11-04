@@ -22,4 +22,4 @@ def mand(cr, ci):
         iter_counter -= 1
 
 # mand(-1,0)
-mand(0, 0.5)
+mand(float(input("cr:")), float(input("ci:")))
