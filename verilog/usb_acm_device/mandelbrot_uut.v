@@ -16,6 +16,7 @@ module f_iter(
     always @(posedge clk48) begin
         if (start_iter) begin
             iter_counter <= 16'd200;
+            iter_counter_out <= 16'd0;
             running = 1'b1;
             res_r <= 0;
             res_i <= 0;

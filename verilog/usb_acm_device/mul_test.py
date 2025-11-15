@@ -61,8 +61,8 @@ def mandel_plot_ppm():
     f.write(b"P6\n%d %d\n255\n"%(x_pixel_size, y_pixel_size))
     x_scale = plain_size/x_pixel_size
     y_scale = plain_size/y_pixel_size
-    for y in range(0, y_pixel_size):
-        for x in range(0, x_pixel_size):
+    for x in range(0, x_pixel_size):
+        for y in range(0, y_pixel_size):
             c_r = O_r + x*x_scale
             c_i = O_i + y*y_scale
             # iter_count = mandel_iter_float(c_r, c_i)
