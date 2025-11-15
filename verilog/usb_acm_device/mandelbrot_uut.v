@@ -15,7 +15,7 @@ module f_iter(
 
     always @(posedge clk48) begin
         if (start_iter) begin
-            iter_counter <= 8'd10;
+            iter_counter <= 16'd200;
             running = 1'b1;
             res_r <= 0;
             res_i <= 0;
@@ -32,7 +32,7 @@ module f_iter(
                 res_r_sqr = ({ {16{res_r[15]}}, res_r[15:0] }*{ {16{res_r[15]}}, res_r[15:0] })>>>14;
                 res_i_sqr = ({ {16{res_i[15]}}, res_i[15:0] }*{ {16{res_i[15]}}, res_i[15:0] })>>>14;
                 // 1<<14 is 1 in fixed point
-                running = ((res_r_sqr + res_i_sqr) <= 16'h4000);
+                running = ((res_r_sqr + res_i_sqr) <= 16'h8000);
                 if (running) begin
                     // Need to sign extend cr and ci for signed arithmetic to work
                     res_r <= res_r_sqr - res_i_sqr + { {16{cr[15]}}, cr[15:0] };
@@ -104,7 +104,7 @@ module mandelbrot_uut (
     // Consumer
     always @(posedge clk48) begin
         // if (uart_in_ready && (out_counter < 4'd8)) begin
-        if (out_counter > 4'd9) begin
+        if (out_counter > 4'd10) begin
             if (data_valid) begin
                 out_counter <= 0;
             end;
@@ -112,15 +112,16 @@ module mandelbrot_uut (
         else begin
             case (out_counter)
                 4'd0 : begin uart_in_data <= cr[15:8]; uart_in_valid = 1; end
-                4'd1 : begin uart_in_data <= cr[7:0]; end
-                4'd2 : begin uart_in_data <= ci[15:8]; end
-                4'd3 : begin uart_in_data <= ci[7:0]; end
-                4'd4 : begin uart_in_data <= iter_counter[15:8]; end
-                4'd5 : uart_in_data <= iter_counter[7:0];
-                4'd6 : uart_in_data <= 8'd0;
-                4'd7 : begin uart_in_data <= 8'd65; end
-                4'd8 : begin uart_in_data <= 8'd66; end
-                4'd9 : begin uart_in_valid <= 0; end
+                4'd1 : uart_in_data <= cr[15:8];
+                4'd2 : uart_in_data <= cr[7:0];
+                4'd3 : uart_in_data <= ci[15:8];
+                4'd4 : uart_in_data <= ci[7:0];
+                4'd5 : uart_in_data <= iter_counter[15:8];
+                4'd6 : uart_in_data <= iter_counter[7:0];
+                4'd7 : uart_in_data <= 8'd0;
+                4'd8 : uart_in_data <= 8'd65;
+                4'd9 : uart_in_data <= 8'd66;
+                4'd10 : uart_in_valid <= 0;
             endcase;
             out_counter <= out_counter + 1;
         end;
