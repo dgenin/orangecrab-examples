@@ -2,12 +2,13 @@
 import serial
 import struct
 import time
+import math
 
 ser = serial.Serial('/dev/ttyACM0', timeout=1)
 p = ser.read(100)
 print(list(map(hex, p)))
 
-SCALE = int(2**14)
+SCALE = int(2**13)
 
 def mandel_iter_float(cr, ci):
     res_r = 0
@@ -26,7 +27,10 @@ def mandel_iter_float(cr, ci):
 
 
 def mandel_iter(cr: float, ci: float):
-    a = int(cr*SCALE)&0xffff
+    a = int(cr*SCALE)&0xffffff
+    if (a>>16) not in [0, 0xff]:
+        print("a overflowed %x at cr %f"%(a, cr))
+    a &= 0xffff
     b = int(ci*SCALE)&0xffff
     out_data = struct.pack(">HHHH", a, b, 0, 0)
     ser.write(out_data)
@@ -47,7 +51,7 @@ def mandel_plot():
         for x in range(0, x_pixel_size):
             c_r = O_r + x*x_scale
             c_i = O_i + y*y_scale
-            iter_count = mandel_iter(c_r, c_i)
+            iter_count = mandel_iter_float(c_r, c_i)
             print("\x1b[%dm*"%(30 + iter_count%16), end="")
         print()
 
@@ -67,9 +71,9 @@ def mandel_plot_ppm():
             c_i = O_i + y*y_scale
             # iter_count = mandel_iter_float(c_r, c_i)
             iter_count = mandel_iter(c_r, c_i)
-            iter_count += (iter_count&1)*20
+            # iter_count += (iter_count&1)*20
             iter_count &= 0xff
-            f.write(bytes([iter_count, iter_count, 255-iter_count]))
+            f.write(bytes([(iter_count&1)<<7, iter_count, 255-iter_count]))
     f.close()
 
 mandel_plot_ppm()
