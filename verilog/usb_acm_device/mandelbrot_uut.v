@@ -69,14 +69,17 @@ module mandelbrot_uut (
 	// Code your design here
     // Mandelbrot input registers
     reg signed [15:0] cr = 16'hFFFF;
-    reg signed [15:0] ci;
+    reg signed [15:0] ci_0, ci_1;
     reg [2:0] reg_counter = 0;
-    wire [15:0] iter_counter;
-    wire data_valid;
+    wire [15:0] iter_counter_0, iter_counter_1;
+    wire data_valid_0, data_valid_1;
+    reg [1:0] data_valid;
     reg data_ready = 0;
     reg start_iter = 0;
+    reg [15:0] clock_counter = 16'd0;
 
-    f_iter mandel_iter (.clk48(clk48), .cr(cr), .ci(ci), .start_iter(start_iter), .data_valid(data_valid), .iter_counter_out(iter_counter));
+    f_iter mandel_iter_0 (.clk48(clk48), .cr(cr), .ci(ci_0), .start_iter(start_iter), .data_valid(data_valid_0), .iter_counter_out(iter_counter_0));
+    f_iter mandel_iter_1 (.clk48(clk48), .cr(cr), .ci(ci_1), .start_iter(start_iter), .data_valid(data_valid_1), .iter_counter_out(iter_counter_1));
 
     // Reader
     always @(posedge clk48) begin
@@ -87,13 +90,14 @@ module mandelbrot_uut (
             case (reg_counter)
                 3'd0 : begin cr[15:8] <= uart_out_data; end
                 3'd1 : begin cr[7:0] <= uart_out_data; end
-                3'd2 : begin ci[15:8] <= uart_out_data; end
-                3'd3 : begin ci[7:0] <= uart_out_data; end
-                3'd4 : begin end
-                3'd5 : begin end
+                3'd2 : begin ci_0[15:8] <= uart_out_data; end
+                3'd3 : begin ci_0[7:0] <= uart_out_data; end
+                3'd4 : begin ci_1[15:8] <= uart_out_data; end
+                3'd5 : begin ci_1[7:0] <= uart_out_data; end
                 3'd6 : begin end
                 3'd7 : begin
                         start_iter <= 1;
+                        // data_valid = 2'd0;
                     end
             endcase
             reg_counter <= reg_counter + 1;
@@ -104,23 +108,38 @@ module mandelbrot_uut (
 
     // Consumer
     always @(posedge clk48) begin
+        if (start_iter)
+            begin
+                clock_counter <= 0;
+            end
+        else
+            begin
+                clock_counter <= clock_counter + 1;
+            end
         // if (uart_in_ready && (out_counter < 4'd8)) begin
+        if (data_valid_0) begin
+            data_valid[0] <= 1;
+        end
+        if (data_valid_1) begin
+            data_valid[1] <= 1;
+        end
         if (out_counter > 4'd10) begin
-            if (data_valid) begin
+            if (data_valid == 2'd3) begin
                 out_counter <= 0;
+                data_valid <= 2'd0;
             end;
         end
         else begin
             case (out_counter)
                 4'd0 : begin uart_in_data <= cr[15:8]; uart_in_valid = 1; end
-                4'd1 : uart_in_data <= cr[15:8];
-                4'd2 : uart_in_data <= cr[7:0];
-                4'd3 : uart_in_data <= ci[15:8];
-                4'd4 : uart_in_data <= ci[7:0];
-                4'd5 : uart_in_data <= iter_counter[15:8];
-                4'd6 : uart_in_data <= iter_counter[7:0];
-                4'd7 : uart_in_data <= 8'd0;
-                4'd8 : uart_in_data <= 8'd65;
+                4'd1 : uart_in_data <= iter_counter_0[15:8];
+                4'd2 : uart_in_data <= iter_counter_0[7:0];
+                4'd3 : uart_in_data <= iter_counter_1[15:8];
+                4'd4 : uart_in_data <= iter_counter_1[7:0];
+                4'd5 : uart_in_data <= iter_counter_0[15:8];
+                4'd6 : uart_in_data <= iter_counter_0[7:0];
+                4'd7 : uart_in_data <= clock_counter[15:8];
+                4'd8 : uart_in_data <= clock_counter[7:0];
                 4'd9 : uart_in_data <= 8'd66;
                 4'd10 : uart_in_valid <= 0;
             endcase;
