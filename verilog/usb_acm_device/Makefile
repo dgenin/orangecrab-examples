@@ -69,7 +69,7 @@ dfu: $(PROJ).dfu
 # Lastly, it will write the json output for nextpnr-ecp5 to use as input.
 %.ys: $(VERILOG_FILES)
 	$(file >$@)
-	$(foreach V,$(VERILOG_FILES),$(file >>$@,read_verilog $V))
+	$(foreach V,$(VERILOG_FILES),$(file >>$@,read_verilog -sv $V))
 	$(file >>$@,synth_ecp5 -top $(TOP_MODULE)) \
 	$(file >>$@,write_json "$(basename $@).json") \
 	$(file >>$@,stat) \
