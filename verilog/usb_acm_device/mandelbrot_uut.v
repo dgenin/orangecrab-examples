@@ -65,27 +65,29 @@ module mandelbrot_uut (
         output rgb_led0_g,
         output rgb_led0_b
     );
-  
+
 	// Code your design here
     // Mandelbrot input registers
     reg signed [15:0] cr = 16'hFFFF;
-    reg signed [15:0] ci_0, ci_1, ci_2, ci_3;
-    reg [3:0] reg_counter = 0;
-    wire [15:0] iter_counter [8:0];
-    // wire [15:0] iter_counter_0, iter_counter_1, iter_counter_2, iter_counter_3;
-    wire [3:0] data_valid_in;
-    reg [3:0] data_valid;
+    reg signed [15:0] ci [4:0];
+    wire [15:0] iter_counter [4:0];
+    wire [4:0] data_valid_in;
+    reg [4:0] data_valid;
     reg data_ready = 0;
     reg start_iter = 0;
     reg [15:0] clock_counter = 16'd0;
 
-    f_iter mandel_iter_0 (.clk48(clk48), .cr(cr), .ci(ci_0), .start_iter(start_iter), .data_valid(data_valid_in[0]), .iter_counter_out(iter_counter[0]));
-    f_iter mandel_iter_1 (.clk48(clk48), .cr(cr), .ci(ci_1), .start_iter(start_iter), .data_valid(data_valid_in[1]), .iter_counter_out(iter_counter[1]));
-    f_iter mandel_iter_2 (.clk48(clk48), .cr(cr), .ci(ci_2), .start_iter(start_iter), .data_valid(data_valid_in[2]), .iter_counter_out(iter_counter[2]));
-    f_iter mandel_iter_3 (.clk48(clk48), .cr(cr), .ci(ci_3), .start_iter(start_iter), .data_valid(data_valid_in[3]), .iter_counter_out(iter_counter[3]));
-    // f_iter mandel_iter_4 (.clk48(clk48), .cr(cr), .ci(ci_3), .start_iter(start_iter), .data_valid(data_valid_4), .iter_counter_out(iter_counter_4));
+    genvar i;
+    generate
+        begin
+            for (i=0; i<5; i = i + 1) begin : mandel_iter_maker
+                f_iter mandel_iter (.clk48(clk48), .cr(cr), .ci(ci[i]), .start_iter(start_iter), .data_valid(data_valid_in[i]), .iter_counter_out(iter_counter[i]));
+            end
+        end
+    endgenerate;
 
     // Reader
+    reg [3:0] reg_counter = 0;
     always @(posedge clk48) begin
         if (start_iter) begin
             start_iter <= 0;
@@ -95,15 +97,17 @@ module mandelbrot_uut (
             case (reg_counter)
                 4'd0 : begin cr[15:8] <= uart_out_data; end
                 4'd1 : begin cr[7:0] <= uart_out_data; end
-                4'd2 : begin ci_0[15:8] <= uart_out_data; end
-                4'd3 : begin ci_0[7:0] <= uart_out_data; end
-                4'd4 : begin ci_1[15:8] <= uart_out_data; end
-                4'd5 : begin ci_1[7:0] <= uart_out_data; end
-                4'd6 : begin ci_2[15:8] <= uart_out_data; end
-                4'd7 : begin ci_2[7:0] <= uart_out_data; end
-                4'd8 : begin ci_3[15:8] <= uart_out_data; end
-                4'd9 : begin
-                            ci_3[7:0] <= uart_out_data;
+                4'd2 : begin ci[0][15:8] <= uart_out_data; end
+                4'd3 : begin ci[0][7:0] <= uart_out_data; end
+                4'd4 : begin ci[1][15:8] <= uart_out_data; end
+                4'd5 : begin ci[1][7:0] <= uart_out_data; end
+                4'd6 : begin ci[2][15:8] <= uart_out_data; end
+                4'd7 : begin ci[2][7:0] <= uart_out_data; end
+                4'd8 : begin ci[3][15:8] <= uart_out_data; end
+                4'd9 : begin ci[3][7:0] <= uart_out_data; end
+                4'd10 : begin ci[4][15:8] <= uart_out_data; end
+                4'd11 : begin
+                            ci[4][7:0] <= uart_out_data;
                             start_iter <= 1;
                         end
                 default: begin end
@@ -112,8 +116,7 @@ module mandelbrot_uut (
         end
     end
 
-    reg [3:0] out_counter = 4'd9;
-
+    reg [3:0] out_counter = 4'd11;
     // Consumer
     always @(posedge clk48) begin
         if (start_iter)
@@ -128,13 +131,13 @@ module mandelbrot_uut (
         // This for-loop makes the timing but
         // the naive simpler data_valid <= data_valid | data_valid_in
         // does not!?
-        for(int i=0; i<4; i = i + 1) begin
+        for(int i = 0; i < 5; i = i + 1) begin
             data_valid[i] <= data_valid[i] | data_valid_in[i];
         end
-        if (out_counter > 4'd10) begin
-            if (data_valid == 4'd15) begin
+        if (out_counter > 4'd12) begin
+            if (data_valid == 5'd31) begin
                 out_counter <= 0;
-                data_valid <= 2'd0;
+                data_valid <= 5'd0;
             end;
         end
         else begin
@@ -150,8 +153,9 @@ module mandelbrot_uut (
                 4'd6 : uart_in_data <= iter_counter[2][7:0];
                 4'd7 : uart_in_data <= iter_counter[3][15:8];
                 4'd8 : uart_in_data <= iter_counter[3][7:0];
-                4'd9 : uart_in_data <= 8'd66;
-                4'd10 : uart_in_valid <= 0;
+                4'd9 : uart_in_data <= iter_counter[4][15:8];
+                4'd10 : uart_in_data <= iter_counter[4][7:0];
+                4'd11 : uart_in_valid <= 0;
             endcase;
             out_counter <= out_counter + 1;
         end;

@@ -37,9 +37,9 @@ def mandel_iter(cr: float, ci: list):
     out_data = struct.pack(">"+"H"*(batch_size+1), *data)
     # print("out_data=", list(map(hex, out_data)))    
     ser.write(out_data)
-    p = ser.read(9)
+    p = ser.read(batch_size*2)
     # print("in data=", list(map(hex, p)))
-    res = struct.unpack(">HHHHb", p)
+    res = struct.unpack(">"+"H"*batch_size, p)
     return (res[0:batch_size])
 
 def mandel_plot():
@@ -59,7 +59,7 @@ def mandel_plot():
         print()
 
 def mandel_plot_ppm():
-    batch_size = 4
+    batch_size = 5
     plain_size = 0.5
     x_pixel_size = 800
     y_pixel_size = 800
