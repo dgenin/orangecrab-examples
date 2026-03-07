@@ -19,21 +19,31 @@ module mandelbrot_test();
         $dumpfile("dump.vcd"); $dumpvars;
         #10
         uart_out_valid = 1'b1;
-        uart_out_data = 8'h00;
+        uart_out_data = 8'hFF;
         #2
-        uart_out_data = 8'h00;
+        uart_out_data = 8'h10;
         #2
-        uart_out_data = 8'h20;
+        uart_out_data = 8'h02;
         #2
-        uart_out_data = 8'h00;
+        uart_out_data = 8'h03;
         #2
-        uart_out_data = 8'h0;
+        uart_out_data = 8'h04;
         #2
-        uart_out_data = 8'h0;
+        uart_out_data = 8'h05;
         #2
-        uart_out_data = 8'h0;
+        uart_out_data = 8'h06;
         #2
-        uart_out_data = 8'h0;
+        uart_out_data = 8'h07;
+        #2
+        uart_out_data = 8'h08;
+        #2
+        uart_out_data = 8'h09;
+        #2
+        uart_out_data = 8'h0a;
+        #2
+        uart_out_data = 8'h0b;
+        #2
+        uart_out_data = 8'h0c;
         #2
         uart_out_valid = 1'b0;
         #1000
