@@ -16,34 +16,35 @@ module mandelbrot_test();
                         .uart_in_data(uart_in_data));
 
     initial begin
+// '0xe0', '0x0', '0xe8', '0x0', '0xe8', '0x6', '0xe8', '0xb', '0xe8', '0x10', '0xe8', '0x15'
         $dumpfile("dump.vcd"); $dumpvars;
         #10
         uart_out_valid = 1'b1;
-        uart_out_data = 8'hFF;
+        uart_out_data = 8'h0e;
         #2
-        uart_out_data = 8'h10;
+        uart_out_data = 8'h00;
         #2
-        uart_out_data = 8'h02;
+        uart_out_data = 8'he8;
         #2
-        uart_out_data = 8'h03;
+        uart_out_data = 8'h00;
         #2
-        uart_out_data = 8'h04;
-        #2
-        uart_out_data = 8'h05;
+        uart_out_data = 8'he8;
         #2
         uart_out_data = 8'h06;
         #2
-        uart_out_data = 8'h07;
-        #2
-        uart_out_data = 8'h08;
-        #2
-        uart_out_data = 8'h09;
-        #2
-        uart_out_data = 8'h0a;
+        uart_out_data = 8'he8;
         #2
         uart_out_data = 8'h0b;
         #2
-        uart_out_data = 8'h0c;
+        uart_out_data = 8'he8;
+        #2
+        uart_out_data = 8'h10;
+        #2
+        uart_out_data = 8'he8;
+        #2
+        uart_out_data = 8'h15;
+        #2
+        uart_out_data = 8'hcc;
         #2
         uart_out_valid = 1'b0;
         #1000

@@ -30,6 +30,7 @@ module f_iter(
                 // Expression in curlies "manually" sign-extend the arguments in the expression
                 // to ensure there are enough bits in the result to get the significant digits.
                 // >>> is sign-extended right-shift, which is necessary to get the right sign.
+                // TODO: Make a constant for the fixed point scale
                 res_r_sqr = ({ {16{res_r[15]}}, res_r[15:0] }*{ {16{res_r[15]}}, res_r[15:0] })>>>13;
                 res_i_sqr = ({ {16{res_i[15]}}, res_i[15:0] }*{ {16{res_i[15]}}, res_i[15:0] })>>>13;
                 // 1<<14 is 1 in fixed point
@@ -39,6 +40,7 @@ module f_iter(
                     res_r <= res_r_sqr - res_i_sqr + { {16{cr[15]}}, cr[15:0] };
                     // Need to ensure there are enough bits for the result of res_r*res_i, before the right
                     // shift. Generally, that will be double the bit width of res_r/res_i
+                    // NOTE: -1 in the shift accounts for the factor of 2 multiplication in the formula for imaginary part
                     res_i <= ((({ {16{res_r[15]}}, res_r[15:0] })*({ {16{res_i[15]}}, res_i[15:0] }))>>>(13-1)) + { {16{ci[15]}}, ci[15:0] };
                     iter_counter <= iter_counter - 1;
                 end else begin
@@ -60,68 +62,72 @@ module f_iter_pipe(
 
     reg signed [15:0] res_r = 0;
     reg signed [15:0] res_i = 0;
-    reg signed [15:0] res_r_1 = 0;
-    reg signed [15:0] res_i_1 = 0;
-    reg signed [15:0] res_r_2 = 0;
-    reg signed [15:0] res_i_2 = 0;
+    reg signed [31:0] res_r_1 = 0;
+    reg signed [31:0] res_i_1 = 0;
+    reg signed [31:0] res_r_2 = 0;
+    reg signed [31:0] res_i_2 = 0;
 
-    reg [20:0] res_r_sqr = 0;
-    reg [20:0] res_i_sqr = 0;
-    reg signed [20:0] res_r_res_i = 0;
+    reg [31:0] r_sqr_0 = 0;
+    reg [31:0] i_sqr_0 = 0;
+    reg signed [31:0] r_i_prod_0 = 0;
     // reg running = 0;
-    reg [15:0] iter_counter = 0;
+    reg [15:0] iter_counter = 16'hFFFF;
     reg [3:0] done = 4'd0;
-    reg [20:0] norm = 0;
+    reg [31:0] norm_1 = 0;
 
     // TODO: Simulate
     always @(posedge clk48) begin
         if (start_iter) begin
-            iter_counter <= 16'd1;
+            iter_counter <= 16'd0;
             iter_counter_out0 <= 16'h0;
-            iter_counter_out1 <= 16'h4000;
-            iter_counter_out2 <= 16'h8000;
-            iter_counter_out3 <= 16'hA000;
+            iter_counter_out1 <= 16'h0;
+            iter_counter_out2 <= 16'h0;
+            iter_counter_out3 <= 16'h0;
             // running = 1'b1;
             // Clear all of the pipeline inputs
-            res_r <= 0;
-            res_i <= 0;
-            res_r_1 <= 0;
-            res_i_1 <= 0;
-            res_r_2 <= 0;
-            res_i_2 <= 0;
-            res_r_sqr <= 0;
-            res_i_sqr <= 0;
-            res_r_res_i <= 0;
+            res_r <= 16'h0;
+            res_i <= 16'h0;
+            res_r_1 <= 32'h0;
+            res_i_1 <= 32'h0;
+            res_r_2 <= 32'h0;
+            res_i_2 <= 32'h0;
+            r_sqr_0 <= 32'h0;
+            i_sqr_0 <= 32'h0;
+            r_i_prod_0 <= 32'h0;
+            norm_1 = 32'h0;
+            done <= 4'd0;
         end;
         case (iter_counter)
-            8'd0 : data_valid <= 0;
+            16'hFFFF : data_valid <= 0;
             default : 
-                if ((done != 4'd15) && (iter_counter <= 16'd2040)) begin
-                    // if (iter_counter < 16'd4) begin
+                if ((done != 4'd15) && (iter_counter <= 16'd800)) begin
+                    // Initialize pipe
+                    // if (iter_counter < 16'd3) begin
                     //     res_r <= 0;
                     //     res_i <= 0;
                     // end
+
                     // Phase 0
                     // NOTE: See concatenation and replication operator documentation
-                    res_r_sqr <= ({ {16{res_r[15]}}, res_r[15:0] }*{ {16{res_r[15]}}, res_r[15:0] })>>>13;
-                    res_i_sqr <= ({ {16{res_i[15]}}, res_i[15:0] }*{ {16{res_i[15]}}, res_i[15:0] })>>>13;
-                    res_r_res_i <= ((({ {16{res_r[15]}}, res_r[15:0] })*({ {16{res_i[15]}}, res_i[15:0] }))>>>(13-1));
+                    r_sqr_0 <= ({ {16{res_r[15]}}, res_r[15:0] }*{ {16{res_r[15]}}, res_r[15:0] })>>>13;
+                    i_sqr_0 <= ({ {16{res_i[15]}}, res_i[15:0] }*{ {16{res_i[15]}}, res_i[15:0] })>>>13;
+                    r_i_prod_0 <= ((({ {16{res_r[15]}}, res_r[15:0] })*({ {16{res_i[15]}}, res_i[15:0] }))>>>(13-1));
 
                     // Phase 1
-                    norm <= res_r_sqr + res_i_sqr;
-                    res_r_1 <= res_r_sqr - res_i_sqr;
+                    norm_1 <= r_sqr_0 + i_sqr_0;
+                    res_r_1 <= r_sqr_0 - i_sqr_0;
                     // NOTE: The first index selects the point using the low bits of the iter_counter, which correspond
                     // to the order in which the points enter the pipeline. The second index is necessary for sign extension.
-                    // NOTE: Phase 1 is manipulating data for *slot* 0 so the indices need to be rolled accordingly.
+                    // NOTE: Phase 1 is manipulating data for cr0+ci0*i at iter_counter[1:0]==1 so the indices need to be rolled accordingly.
                     case (iter_counter[1:0])
-                        2'd0 : res_i_1 <= res_r_res_i + { {16{ci3[15]}}, ci3[15:0] };
-                        2'd1 : res_i_1 <= res_r_res_i + { {16{ci0[15]}}, ci0[15:0] };
-                        2'd2 : res_i_1 <= res_r_res_i + { {16{ci1[15]}}, ci1[15:0] };
-                        2'd3 : res_i_1 <= res_r_res_i + { {16{ci2[15]}}, ci2[15:0] };
+                        2'd0 : res_i_1 <= r_i_prod_0 + { {16{ci3[15]}}, ci3[15:0] };
+                        2'd1 : res_i_1 <= r_i_prod_0 + { {16{ci0[15]}}, ci0[15:0] };
+                        2'd2 : res_i_1 <= r_i_prod_0 + { {16{ci1[15]}}, ci1[15:0] };
+                        2'd3 : res_i_1 <= r_i_prod_0 + { {16{ci2[15]}}, ci2[15:0] };
                     endcase
                     
                     // Phase 2
-                    if ((norm >= 20'h8000) && (done[iter_counter[1:0]] == 0)) begin
+                    if ((norm_1 >= 21'h8000) && (done[iter_counter[1:0]] == 0)) begin
                         case (iter_counter[1:0])
                             2'd0 : iter_counter_out2 <= iter_counter[15:2];
                             2'd1 : iter_counter_out3 <= iter_counter[15:2];
@@ -139,13 +145,16 @@ module f_iter_pipe(
                     res_i_2 <= res_i_1;
                     
                     // Phase 3
-                    res_r <= res_r_2;
-                    res_i <= res_i_2;
+                    // Do not propagate invalid results until the pipeline is fully initialized
+                    if (iter_counter>16'd2) begin
+                        res_r <= res_r_2[15:0];
+                        res_i <= res_i_2[15:0];
+                    end
 
                     iter_counter <= iter_counter + 1;
                 end else begin
                     data_valid <= 1;
-                    iter_counter <= 0;
+                    iter_counter <= 16'hFFFF;
                 end
         endcase
     end
@@ -172,8 +181,10 @@ module mandelbrot_uut (
     reg signed [15:0] cr = 16'hFFFF;
     reg signed [15:0] ci [4:0];
     wire [15:0] iter_counter [4:0];
-    wire [4:0] data_valid_in;
-    reg [4:0] data_valid;
+    // wire [4:0] data_valid_in;
+    wire [0:0] data_valid_in;
+    // reg [4:0] data_valid = 5'd0;
+    reg [0:0] data_valid = 1'd0;
     reg data_ready = 0;
     reg start_iter = 0;
     reg [15:0] clock_counter = 16'd0;
@@ -243,9 +254,11 @@ module mandelbrot_uut (
         // end
         data_valid[0] <= data_valid[0] | data_valid_in[0];
         if (out_counter > 4'd12) begin
-            if (data_valid == 5'd1) begin
+            // if (data_valid == 5'd1) begin
+            if (data_valid == 1'd1) begin
                 out_counter <= 0;
-                data_valid <= 5'd0;
+                // data_valid <= 5'd0;
+                data_valid <= 1'd0;
             end;
         end
         else begin

@@ -27,6 +27,8 @@ def mandel_iter_float(cr, ci):
 
 
 def mandel_iter(cr: float, ci: list):
+    # Remove when the stripe bug is fixed
+    ci.append(0)
     batch_size = len(ci)
     data = [int(cr*SCALE)&0xffff]
     # if (a[0]>>16) not in [0, 0xff]:
@@ -59,7 +61,7 @@ def mandel_plot():
         print()
 
 def mandel_plot_ppm():
-    batch_size = 5
+    batch_size = 4
     plain_size = 0.5
     x_pixel_size = 800
     y_pixel_size = 800
@@ -80,7 +82,7 @@ def mandel_plot_ppm():
                 # c_i.append(O_i)
             # iter_count = mandel_iter_float(c_r, c_i)
             iter_count = mandel_iter(c_r, c_i)
-            # `print`(iter_count)
+            # print(iter_count)
             for i in range(0, batch_size):
                 f.write(bytes([(iter_count[i]&1)<<7, iter_count[i]&0xFF, (255-iter_count[i])&0xFF]))
     f.close()
