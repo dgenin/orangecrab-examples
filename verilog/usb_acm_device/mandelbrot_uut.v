@@ -101,12 +101,6 @@ module f_iter_pipe(
             16'hFFFF : data_valid <= 0;
             default : 
                 if ((done != 4'd15) && (iter_counter <= 16'd800)) begin
-                    // Initialize pipe
-                    // if (iter_counter < 16'd3) begin
-                    //     res_r <= 0;
-                    //     res_i <= 0;
-                    // end
-
                     // Phase 0
                     // NOTE: See concatenation and replication operator documentation
                     r_sqr_0 <= ({ {16{res_r[15]}}, res_r[15:0] }*{ {16{res_r[15]}}, res_r[15:0] })>>>13;
@@ -127,20 +121,19 @@ module f_iter_pipe(
                     endcase
                     
                     // Phase 2
-                    if ((norm_1 >= 21'h8000) && (done[iter_counter[1:0]] == 0)) begin
+                    if ((norm_1 >= 21'h8000) && (done[iter_counter[1:0]+2'd2] == 0)) begin
                         case (iter_counter[1:0])
-                            2'd0 : iter_counter_out2 <= iter_counter[15:2];
-                            2'd1 : iter_counter_out3 <= iter_counter[15:2];
-                            2'd2 : iter_counter_out0 <= iter_counter[15:2];
-                            2'd3 : iter_counter_out1 <= iter_counter[15:2];
+                            2'd0 : begin iter_counter_out2 <= (iter_counter-16'd2)>>2; done[2] <= 1; end
+                            2'd1 : begin iter_counter_out3 <= (iter_counter-16'd2)>>2; done[3] <= 1; end
+                            2'd2 : begin iter_counter_out0 <= (iter_counter-16'd2)>>2; done[0] <= 1; end
+                            2'd3 : begin iter_counter_out1 <= (iter_counter-16'd2)>>2; done[1] <= 1; end
                         endcase
-                        done[iter_counter[1:0]] <= 1;
                     end
                     case (iter_counter[1:0])
-                        2'd0 : res_r_2 <= res_r_1 + { {16{cr1[15]}}, cr1[15:0] };
-                        2'd1 : res_r_2 <= res_r_1 + { {16{cr2[15]}}, cr2[15:0] };
-                        2'd2 : res_r_2 <= res_r_1 + { {16{cr3[15]}}, cr3[15:0] };
-                        2'd3 : res_r_2 <= res_r_1 + { {16{cr0[15]}}, cr0[15:0] };
+                        2'd0 : res_r_2 <= res_r_1 + { {16{cr2[15]}}, cr1[15:0] };
+                        2'd1 : res_r_2 <= res_r_1 + { {16{cr3[15]}}, cr2[15:0] };
+                        2'd2 : res_r_2 <= res_r_1 + { {16{cr0[15]}}, cr3[15:0] };
+                        2'd3 : res_r_2 <= res_r_1 + { {16{cr1[15]}}, cr0[15:0] };
                     endcase
                     res_i_2 <= res_i_1;
                     

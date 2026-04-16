@@ -30,19 +30,19 @@ module mandelbrot_test();
         #2
         uart_out_data = 8'he8;
         #2
-        uart_out_data = 8'h06;
+        uart_out_data = 8'h00;
         #2
         uart_out_data = 8'he8;
         #2
-        uart_out_data = 8'h0b;
+        uart_out_data = 8'h00;
         #2
         uart_out_data = 8'he8;
         #2
-        uart_out_data = 8'h10;
+        uart_out_data = 8'h00;
         #2
         uart_out_data = 8'he8;
         #2
-        uart_out_data = 8'h15;
+        uart_out_data = 8'h00;
         #2
         uart_out_data = 8'hcc;
         #2
