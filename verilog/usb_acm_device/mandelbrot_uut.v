@@ -54,9 +54,9 @@ endmodule
 
 module f_iter_pipe(
          input wire clk48,
-         input wire signed [15:0] cr0, cr1, cr2, cr3,
-         input wire signed [15:0] ci0, ci1, ci2, ci3,
-         output reg [15:0] iter_counter_out0, iter_counter_out1, iter_counter_out2, iter_counter_out3 = 0,
+         input wire signed [15:0] cr0, cr1, cr2,
+         input wire signed [15:0] ci0, ci1, ci2,
+         output reg [15:0] iter_counter_out0, iter_counter_out1, iter_counter_out2,
          input wire start_iter,
          output reg data_valid = 0);
 
@@ -65,8 +65,6 @@ module f_iter_pipe(
     reg unsigned [1:0] phase_counter = 0;
     reg signed [31:0] res_r_1 = 0;
     reg signed [31:0] res_i_1 = 0;
-    reg signed [31:0] res_r_2 = 0;
-    reg signed [31:0] res_i_2 = 0;
     reg unsigned[15:0] iter_0 = 0;
     reg unsigned[15:0] iter_1 = 0;
 
@@ -75,7 +73,7 @@ module f_iter_pipe(
     reg signed [31:0] r_i_prod_0 = 0;
     // reg running = 0;
     reg [15:0] iter_counter = 16'hFFFF;
-    reg [3:0] done = 4'd0;
+    reg [2:0] done = 3'd0;
     reg [31:0] norm_1 = 0;
 
     always @(posedge clk48) begin
@@ -84,15 +82,12 @@ module f_iter_pipe(
             iter_counter_out0 <= 16'h0;
             iter_counter_out1 <= 16'h0;
             iter_counter_out2 <= 16'h0;
-            iter_counter_out3 <= 16'h0;
             // running = 1'b1;
             // Clear all of the pipeline inputs
             res_r <= 16'h0;
             res_i <= 16'h0;
             res_r_1 <= 32'h0;
             res_i_1 <= 32'h0;
-            res_r_2 <= 32'h0;
-            res_i_2 <= 32'h0;
             r_sqr_0 <= 32'h0;
             i_sqr_0 <= 32'h0;
             iter_0 <= 16'h0;
@@ -121,40 +116,34 @@ module f_iter_pipe(
                     // to the order in which the points enter the pipeline. The second index is necessary for sign extension.
                     // NOTE: Phase 1 is manipulating data for cr0+ci0*i at iter_counter[1:0]==1 so the indices need to be rolled accordingly.
                     case (phase_counter)
-                        2'd0 : res_i_1 <= r_i_prod_0 + { {16{ci3[15]}}, ci3[15:0] };
+                        2'd0 : res_i_1 <= r_i_prod_0 + { {16{ci2[15]}}, ci2[15:0] };
                         2'd1 : res_i_1 <= r_i_prod_0 + { {16{ci0[15]}}, ci0[15:0] };
                         2'd2 : res_i_1 <= r_i_prod_0 + { {16{ci1[15]}}, ci1[15:0] };
-                        2'd3 : res_i_1 <= r_i_prod_0 + { {16{ci2[15]}}, ci2[15:0] };
                     endcase
                     
                     // Phase 2
                     if (norm_1 >= 21'h8000) begin
                         case (phase_counter)
-                            2'd0 : if (done[2] == 0) begin iter_counter_out2 <= iter_1; done[2] <= 1; end
-                            2'd1 : if (done[3] == 0) begin iter_counter_out3 <= iter_1; done[3] <= 1; end
+                            2'd0 : if (done[1] == 0) begin iter_counter_out1 <= iter_1; done[1] <= 1; end
+                            2'd1 : if (done[2] == 0) begin iter_counter_out2 <= iter_1; done[2] <= 1; end
                             2'd2 : if (done[0] == 0) begin iter_counter_out0 <= iter_1; done[0] <= 1; end
-                            2'd3 : if (done[1] == 0) begin iter_counter_out1 <= iter_1; done[1] <= 1; end
                         endcase
                     end
-                    case (phase_counter)
-                        2'd0 : res_r_2 <= res_r_1 + { {16{cr2[15]}}, cr2[15:0] };
-                        2'd1 : res_r_2 <= res_r_1 + { {16{cr3[15]}}, cr3[15:0] };
-                        2'd2 : res_r_2 <= res_r_1 + { {16{cr0[15]}}, cr0[15:0] };
-                        2'd3 : res_r_2 <= res_r_1 + { {16{cr1[15]}}, cr1[15:0] };
-                    endcase
-                    res_i_2 <= res_i_1;
-                    
-                    // Phase 3
-                    // Do not propagate invalid results until the pipeline is fully initialized
-                    if ((iter_counter > 16'd0) || (phase_counter > 16'd2)) begin
-                        res_r <= res_r_2[15:0];
-                        res_i <= res_i_2[15:0];
+                    if ((iter_counter > 16'd0) || (phase_counter > 16'd1)) begin
+                        case (phase_counter)
+                            2'd0 : res_r <= res_r_1 + { {16{cr1[15]}}, cr1[15:0] };
+                            2'd1 : res_r <= res_r_1 + { {16{cr2[15]}}, cr2[15:0] };
+                            2'd2 : res_r <= res_r_1 + { {16{cr0[15]}}, cr0[15:0] };
+                        endcase
+                        res_i <= res_i_1;
                     end
-                    if (phase_counter == 2'd3) begin
+                    
+                    if (phase_counter == 2'd2) begin
                         iter_counter <= iter_counter + 1;
+                        phase_counter <= 2'd0;
+                    end else begin
+                        phase_counter <= phase_counter + 1;
                     end;
-
-                    phase_counter <= phase_counter + 1;
                 end else begin
                     data_valid <= 1;
                     iter_counter <= 16'hFFFF;
@@ -185,9 +174,9 @@ module mandelbrot_uut (
     reg signed [15:0] ci [4:0];
     wire [15:0] iter_counter [4:0];
     // wire [4:0] data_valid_in;
-    wire [0:0] data_valid_in;
+    wire [1:0] data_valid_in;
     // reg [4:0] data_valid = 5'd0;
-    reg [0:0] data_valid = 1'd0;
+    reg [1:0] data_valid = 2'd0;
     reg data_ready = 0;
     reg start_iter = 0;
     reg [15:0] clock_counter = 16'd0;
@@ -201,11 +190,17 @@ module mandelbrot_uut (
     //     end
     // endgenerate;
 
-    f_iter_pipe mandel_iter (.clk48(clk48), .cr0(cr), .cr1(cr), .cr2(cr), .cr3(cr),
-                               .ci0(ci[0]), .ci1(ci[1]), .ci2(ci[2]), .ci3(ci[3]),
+    f_iter_pipe mandel_iter_0 (.clk48(clk48), .cr0(cr), .cr1(cr), .cr2(cr), 
+                               .ci0(ci[0]), .ci1(ci[1]), .ci2(ci[2]),
                                .start_iter(start_iter), .data_valid(data_valid_in[0]),
                                .iter_counter_out0(iter_counter[0]), .iter_counter_out1(iter_counter[1]),
-                               .iter_counter_out2(iter_counter[2]), .iter_counter_out3(iter_counter[3]));
+                               .iter_counter_out2(iter_counter[2]));
+
+    f_iter_pipe mandel_iter_1 (.clk48(clk48), .cr0(cr), .cr1(cr), .cr2(cr), 
+                               .ci0(ci[3]), .ci1(ci[4]), .ci2(ci[4]),
+                               .start_iter(start_iter), .data_valid(data_valid_in[1]),
+                               .iter_counter_out0(iter_counter[3]), .iter_counter_out1(iter_counter[4]),
+                               .iter_counter_out2(iter_counter[4]));
 
     // Reader
     reg [3:0] reg_counter = 0;
@@ -256,12 +251,13 @@ module mandelbrot_uut (
         //     data_valid[i] <= data_valid[i] | data_valid_in[i];
         // end
         data_valid[0] <= data_valid[0] | data_valid_in[0];
+        data_valid[1] <= data_valid[1] | data_valid_in[1];
         if (out_counter > 4'd12) begin
             // if (data_valid == 5'd1) begin
-            if (data_valid == 1'd1) begin
+            if (data_valid == 2'd3) begin
                 out_counter <= 0;
                 // data_valid <= 5'd0;
-                data_valid <= 1'd0;
+                data_valid <= 2'd0;
             end;
         end
         else begin
