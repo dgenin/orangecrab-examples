@@ -62,10 +62,13 @@ module f_iter_pipe(
 
     reg signed [15:0] res_r = 0;
     reg signed [15:0] res_i = 0;
+    reg unsigned [1:0] phase_counter = 0;
     reg signed [31:0] res_r_1 = 0;
     reg signed [31:0] res_i_1 = 0;
     reg signed [31:0] res_r_2 = 0;
     reg signed [31:0] res_i_2 = 0;
+    reg unsigned[15:0] iter_0 = 0;
+    reg unsigned[15:0] iter_1 = 0;
 
     reg [31:0] r_sqr_0 = 0;
     reg [31:0] i_sqr_0 = 0;
@@ -75,7 +78,6 @@ module f_iter_pipe(
     reg [3:0] done = 4'd0;
     reg [31:0] norm_1 = 0;
 
-    // TODO: Simulate
     always @(posedge clk48) begin
         if (start_iter) begin
             iter_counter <= 16'd0;
@@ -93,9 +95,12 @@ module f_iter_pipe(
             res_i_2 <= 32'h0;
             r_sqr_0 <= 32'h0;
             i_sqr_0 <= 32'h0;
+            iter_0 <= 16'h0;
+            iter_1 <= 16'h0;
             r_i_prod_0 <= 32'h0;
             norm_1 = 32'h0;
             done <= 4'd0;
+            phase_counter <= 2'd0;
         end;
         case (iter_counter)
             16'hFFFF : data_valid <= 0;
@@ -106,14 +111,16 @@ module f_iter_pipe(
                     r_sqr_0 <= ({ {16{res_r[15]}}, res_r[15:0] }*{ {16{res_r[15]}}, res_r[15:0] })>>>13;
                     i_sqr_0 <= ({ {16{res_i[15]}}, res_i[15:0] }*{ {16{res_i[15]}}, res_i[15:0] })>>>13;
                     r_i_prod_0 <= ((({ {16{res_r[15]}}, res_r[15:0] })*({ {16{res_i[15]}}, res_i[15:0] }))>>>(13-1));
+                    iter_0 <= iter_counter;
 
                     // Phase 1
                     norm_1 <= r_sqr_0 + i_sqr_0;
                     res_r_1 <= r_sqr_0 - i_sqr_0;
+                    iter_1 <= iter_0;
                     // NOTE: The first index selects the point using the low bits of the iter_counter, which correspond
                     // to the order in which the points enter the pipeline. The second index is necessary for sign extension.
                     // NOTE: Phase 1 is manipulating data for cr0+ci0*i at iter_counter[1:0]==1 so the indices need to be rolled accordingly.
-                    case (iter_counter[1:0])
+                    case (phase_counter)
                         2'd0 : res_i_1 <= r_i_prod_0 + { {16{ci3[15]}}, ci3[15:0] };
                         2'd1 : res_i_1 <= r_i_prod_0 + { {16{ci0[15]}}, ci0[15:0] };
                         2'd2 : res_i_1 <= r_i_prod_0 + { {16{ci1[15]}}, ci1[15:0] };
@@ -121,30 +128,33 @@ module f_iter_pipe(
                     endcase
                     
                     // Phase 2
-                    if ((norm_1 >= 21'h8000) && (done[iter_counter[1:0]+2'd2] == 0)) begin
-                        case (iter_counter[1:0])
-                            2'd0 : begin iter_counter_out2 <= (iter_counter-16'd2)>>2; done[2] <= 1; end
-                            2'd1 : begin iter_counter_out3 <= (iter_counter-16'd2)>>2; done[3] <= 1; end
-                            2'd2 : begin iter_counter_out0 <= (iter_counter-16'd2)>>2; done[0] <= 1; end
-                            2'd3 : begin iter_counter_out1 <= (iter_counter-16'd2)>>2; done[1] <= 1; end
+                    if (norm_1 >= 21'h8000) begin
+                        case (phase_counter)
+                            2'd0 : if (done[2] == 0) begin iter_counter_out2 <= iter_1; done[2] <= 1; end
+                            2'd1 : if (done[3] == 0) begin iter_counter_out3 <= iter_1; done[3] <= 1; end
+                            2'd2 : if (done[0] == 0) begin iter_counter_out0 <= iter_1; done[0] <= 1; end
+                            2'd3 : if (done[1] == 0) begin iter_counter_out1 <= iter_1; done[1] <= 1; end
                         endcase
                     end
-                    case (iter_counter[1:0])
-                        2'd0 : res_r_2 <= res_r_1 + { {16{cr2[15]}}, cr1[15:0] };
-                        2'd1 : res_r_2 <= res_r_1 + { {16{cr3[15]}}, cr2[15:0] };
-                        2'd2 : res_r_2 <= res_r_1 + { {16{cr0[15]}}, cr3[15:0] };
-                        2'd3 : res_r_2 <= res_r_1 + { {16{cr1[15]}}, cr0[15:0] };
+                    case (phase_counter)
+                        2'd0 : res_r_2 <= res_r_1 + { {16{cr2[15]}}, cr2[15:0] };
+                        2'd1 : res_r_2 <= res_r_1 + { {16{cr3[15]}}, cr3[15:0] };
+                        2'd2 : res_r_2 <= res_r_1 + { {16{cr0[15]}}, cr0[15:0] };
+                        2'd3 : res_r_2 <= res_r_1 + { {16{cr1[15]}}, cr1[15:0] };
                     endcase
                     res_i_2 <= res_i_1;
                     
                     // Phase 3
                     // Do not propagate invalid results until the pipeline is fully initialized
-                    if (iter_counter>16'd2) begin
+                    if ((iter_counter > 16'd0) || (phase_counter > 16'd2)) begin
                         res_r <= res_r_2[15:0];
                         res_i <= res_i_2[15:0];
                     end
+                    if (phase_counter == 2'd3) begin
+                        iter_counter <= iter_counter + 1;
+                    end;
 
-                    iter_counter <= iter_counter + 1;
+                    phase_counter <= phase_counter + 1;
                 end else begin
                     data_valid <= 1;
                     iter_counter <= 16'hFFFF;
