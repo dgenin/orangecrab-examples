@@ -77,7 +77,7 @@ module f_iter_pipe(
     reg [31:0] norm_1 = 0;
 
     always @(posedge clk48) begin
-        if (start_iter) begin
+        if ( ) begin
             iter_counter <= 16'd0;
             iter_counter_out0 <= 16'h0;
             iter_counter_out1 <= 16'h0;
@@ -152,6 +152,135 @@ module f_iter_pipe(
     end
 endmodule
 
+module image_iter (
+    input clk48,
+
+    input wire tl_r[15:0], tl_i[15:0], step[15:0], width[15:0],
+    input wire start_image[1:0],
+    output reg finished = 0
+    )
+
+    reg signed [15:0] cr = 16'hFFFF;
+    reg signed [15:0] ci [5:0];
+    wire [15:0] iter_counter [5:0];
+    // width must be divisible by batch size, currently 6.
+    reg batch_counter[7:0] = 0;
+    reg r_counter[15:0] = 0;
+    reg i_counter[15:0] = 0;
+    `define IDLE 2'd0
+    `define INIT 2'd1
+    `define COMPUTE 2'd2
+    `define SEND 2'd3
+    reg state[1:0] = IDLE;
+    reg p_r[15:0], p_i[15:0];
+
+
+    f_iter_pipe mandel_iter_0 (.clk48(clk48), .cr0(cr), .cr1(cr), .cr2(cr), 
+                               .ci0(ci[0]), .ci1(ci[1]), .ci2(ci[2]),
+                               .start_iter(start_iter), .data_valid(data_valid_in[0]),
+                               .iter_counter_out0(iter_counter[0]), .iter_counter_out1(iter_counter[1]),
+                               .iter_counter_out2(iter_counter[2]));
+
+    f_iter_pipe mandel_iter_1 (.clk48(clk48), .cr0(cr), .cr1(cr), .cr2(cr), 
+                               .ci0(ci[3]), .ci1(ci[4]), .ci2(ci[5]),
+                               .start_iter(start_iter), .data_valid(data_valid_in[1]),
+                               .iter_counter_out0(iter_counter[3]), .iter_counter_out1(iter_counter[4]),
+                               .iter_counter_out2(iter_counter[5]));
+
+    // for cr in range(0, tl_r):
+    //    for ci in range(0, tl_i, 6):
+    always @(posedge clk48) begin
+        if (start_image) begin
+            batch_counter <= 0;
+            i_counter <= 0;
+            r_counter <= 0;
+            p_r <= tl_r;
+            p_i <= tl_i;
+            state = INIT;
+        end
+        case (state)
+            IDLE: begin finished <= 0; end;
+            INIT: begin
+                    case (batch_counter) 
+                        3'd0 begin
+                            c_r <= p_r;
+                            c_i[0] <= p_i;
+                        end
+                        3'd1 begin
+                            c_i[1] <= p_i;
+                        end
+                        3'd2 begin
+                            c_i[2] <= p_i;
+                        end
+                        3'd3 begin
+                            c_i[3] <= p_i;
+                        end
+                        3'd4 begin
+                            c_i[4] <= p_i;
+                        end
+                        3'd5 begin
+                            c_i[5] <= p_i;
+                        end
+                        3'd6 begin
+                            state <= COMPUTE;
+                            batch_counter <= 0;
+                        end;
+                    endcase;
+                    if (batch_counter < 6) begin
+                        batch_counter <= batch_counter + 1;
+                    end
+                    if (i_counter > width) begin
+                        i_counter <= 0;
+                        r_counter <= r_counter + 1;
+                        p_r <= p_r + step;
+                        p_i <= tl_i;
+                    end else begin
+                        i_counter <= i_counter + 1;
+                        p_i <= p_i + step;
+                    end
+                end
+            COMPUTE: begin 
+                start_iter <= 1;
+                if (start_iter) begin
+                    start_iter <= 0;
+                end
+                if (data_valid == 3) begin
+                    state <= SEND;
+                end
+            end
+            SEND: begin
+                case (batch_counter)
+                    4'd0 : begin uart_in_data <= 8'd0; uart_in_valid = 1; end
+                    4'd1 : uart_in_data <= iter_counter[0][15:8];
+                    4'd2 : uart_in_data <= iter_counter[0][7:0];
+                    4'd3 : uart_in_data <= iter_counter[1][15:8];
+                    4'd4 : uart_in_data <= iter_counter[1][7:0];
+                    4'd5 : uart_in_data <= iter_counter[2][15:8];
+                    4'd6 : uart_in_data <= iter_counter[2][7:0];
+                    4'd7 : uart_in_data <= iter_counter[3][15:8];
+                    4'd8 : uart_in_data <= iter_counter[3][7:0];
+                    4'd9 : uart_in_data <= iter_counter[4][15:8];
+                    4'd10 : uart_in_data <= iter_counter[4][7:0];
+                    4'd11 : uart_in_data <= iter_counter[5][15:8];
+                    4'd12 : uart_in_data <= iter_counter[5][7:0];
+                    4'd13 : begin
+                        uart_in_valid <= 0;
+                        if (r_counter > width) && (i_counter > width) && (data_valid == 3) begin
+                            finished <= 1;
+                            state <= IDLE;
+                        end else begin
+                            state <= INIT;
+                            batch_counter <= 0;
+                        end
+                    end
+                endcase;
+                batch_counter <= batch_counter + 1;
+            end
+        endcase 
+    end
+endmodule
+
+
 module mandelbrot_uut (
         input  clk48,
 
@@ -202,30 +331,36 @@ module mandelbrot_uut (
                                .iter_counter_out0(iter_counter[3]), .iter_counter_out1(iter_counter[4]),
                                .iter_counter_out2(iter_counter[4]));
 
+    // 
+    
+
     // Reader
     reg [3:0] reg_counter = 0;
     always @(posedge clk48) begin
-        if (start_iter) begin
-            start_iter <= 0;
+        if (start_image) begin
+            start_image <= 0;
             reg_counter <= 0;
         end;
         if (uart_out_valid) begin
             case (reg_counter)
-                4'd0 : begin cr[15:8] <= uart_out_data; end
-                4'd1 : begin cr[7:0] <= uart_out_data; end
-                4'd2 : begin ci[0][15:8] <= uart_out_data; end
-                4'd3 : begin ci[0][7:0] <= uart_out_data; end
-                4'd4 : begin ci[1][15:8] <= uart_out_data; end
-                4'd5 : begin ci[1][7:0] <= uart_out_data; end
-                4'd6 : begin ci[2][15:8] <= uart_out_data; end
-                4'd7 : begin ci[2][7:0] <= uart_out_data; end
-                4'd8 : begin ci[3][15:8] <= uart_out_data; end
-                4'd9 : begin ci[3][7:0] <= uart_out_data; end
-                4'd10 : begin ci[4][15:8] <= uart_out_data; end
-                4'd11 : begin
-                            ci[4][7:0] <= uart_out_data;
-                            start_iter <= 1;
-                        end
+                4'd0 : begin tl_r[15:8] <= uart_out_data; end
+                4'd1 : begin tl_r[7:0] <= uart_out_data; end
+                4'd2 : begin tl_i[15:8] <= uart_out_data; end
+                4'd3 : begin tl_i[7:0] <= uart_out_data; end
+                4'd4 : begin step[15:8] <= uart_out_data; end
+                4'd5 : begin step[7:0] <= uart_out_data; end
+                4'd6 : begin width[15:8] <= uart_out_data; end
+                4'd7 : begin 
+                        width[7:0] <= uart_out_data;
+                        start_image <= 1;
+                    end
+                // 4'd8 : begin ci[3][15:8] <= uart_out_data; end
+                // 4'd9 : begin ci[3][7:0] <= uart_out_data; end
+                // 4'd10 : begin ci[4][15:8] <= uart_out_data; end
+                // 4'd11 : begin
+                //             ci[4][7:0] <= uart_out_data;
+                //             start_iter <= 1;
+                //         end
                 default: begin end
             endcase
             reg_counter <= reg_counter + 1;
