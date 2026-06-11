@@ -100,7 +100,8 @@ module f_iter_pipe(
         case (iter_counter)
             16'hFFFF : data_valid <= 0;
             default : 
-                if ((done != 4'd15) && (iter_counter <= 16'd800)) begin
+                // if ((done != 4'd15) && (iter_counter <= 16'd800)) begin
+                if ((done != 4'd15) && (iter_counter <= 16'd5)) begin
                     // Phase 0
                     // NOTE: See concatenation and replication operator documentation
                     r_sqr_0 <= ({ {16{res_r[15]}}, res_r[15:0] }*{ {16{res_r[15]}}, res_r[15:0] })>>>13;
@@ -201,7 +202,7 @@ module image_iter (
             r_counter <= 0;
             p_r <= tl_r;
             p_i <= tl_i;
-            state = `IMAGE_ITER_INIT;
+            state <= `IMAGE_ITER_INIT;
         end
         case (state)
             `IMAGE_ITER_IDLE: begin finished <= 0; end
@@ -245,17 +246,22 @@ module image_iter (
                         end
                     end
             `IMAGE_ITER_COMPUTE: begin 
-                        start_iter <= 1;
-                        if (start_iter) begin
-                            start_iter <= 0;
+                        if (batch_counter == 0) begin
+                            start_iter <= 1;
+                            batch_counter <= 1; // Not used for batch counting here
                             data_valid <= 0;
+                        end else if (start_iter) begin
+                            start_iter <= 0;
                         end
                         data_valid <= data_valid | data_valid_in;
                         if (data_valid == 3) begin
                             state <= `IMAGE_ITER_SEND;
+                            batch_counter <= 0; // Not used for batch counting here
+                            data_valid <= 0;
                         end
                     end
             `IMAGE_ITER_SEND: begin
+                // FIXME: Honor USB flow control flag
                 case (batch_counter)
                     4'd0 : begin uart_in_data <= 8'd0; uart_in_valid <= 1; end
                     4'd1 : uart_in_data <= iter_counter[0][15:8];
@@ -272,16 +278,19 @@ module image_iter (
                     4'd12 : uart_in_data <= iter_counter[5][7:0];
                     4'd13 : begin
                         uart_in_valid <= 0;
-                        if ((r_counter > width) && (i_counter > width) && (data_valid == 3)) begin
+                        // if ((r_counter > width) && (i_counter > width) && (data_valid == 3)) begin
+                        if ((r_counter > width) && (i_counter > width)) begin
                             finished <= 1;
                             state <= `IMAGE_ITER_IDLE;
                         end else begin
                             state <= `IMAGE_ITER_INIT;
-                            batch_counter <= 0;
                         end
+                        batch_counter <= 0;
                     end
                 endcase;
-                batch_counter <= batch_counter + 1;
+                if (batch_counter < 13) begin
+                    batch_counter <= batch_counter + 1;
+                end
             end
         endcase 
     end
