@@ -5,6 +5,8 @@ module mandelbrot_test();
     wire uart_in_valid;
     wire [7:0] uart_in_data;
     wire uart_out_ready;
+    reg uart_in_ready = 1'b1;
+
     always #1 clk48 <= !clk48;
 
     mandelbrot_uut uut (.clk48(clk48),
@@ -19,6 +21,7 @@ module mandelbrot_test();
 // '0xe0', '0x0', '0xe8', '0x0', '0xe8', '0x6', '0xe8', '0xb', '0xe8', '0x10', '0xe8', '0x15'
         $dumpfile("dump.vcd"); $dumpvars;
         #10
+        uart_in_ready = 1'b1;
         uart_out_valid = 1'b1;
         uart_out_data = 8'h0e;
         #2
