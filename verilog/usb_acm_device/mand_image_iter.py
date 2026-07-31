@@ -22,10 +22,13 @@ def image_iter(tl_r: float, tl_i: float, step: float, width: int):
     # print("out_data=", list(map(hex, out_data)))    
     ser.write(out_data)
     p = bytes([])
-    for i in range(0, (2*width*width)//6):
-        b = ser.read(504)
+    for i in range(0, width):
+        b = bytes([])
+        for j in range(0, 2*width//12):
+            b += ser.read(14)[2:14]
         # print("in data=", list(map(hex, p)))
-        if len(b) != 504:
+        print(i, " ", len(b), " ", end=" | ")
+        if len(b) != 2*width:
             break
         p += b
         # print(b)
@@ -35,8 +38,8 @@ def image_iter(tl_r: float, tl_i: float, step: float, width: int):
 
 def mandel_plot():
     plain_size = 1.0
-    x_pixel_size = 80
-    y_pixel_size = 40
+    x_pixel_size = 800
+    y_pixel_size = 800
     O_r = -2
     O_i = -2
     x_scale = plain_size/x_pixel_size
@@ -50,17 +53,16 @@ def mandel_plot():
         print()
 
 def mandel_plot_ppm():
-    batch_size = 4
-    plain_size = 0.5
-    x_pixel_size = 144
-    y_pixel_size = 144
-    O_r = -1
-    O_i = -0.75
+    plain_size = 4
+    x_pixel_size = 804
+    y_pixel_size = 804
+    # O_r = -1
+    # O_i = -0.75
+    O_r = -2
+    O_i = -2
     f = open("mandel.ppm", "wb")
     # f.write(b"P6\n%d %d\n255\n"%(x_pixel_size, y_pixel_size))
-    f.write(b"P6\n%d %d\n255\n"%(x_pixel_size, y_pixel_size))
-    x_scale = plain_size/x_pixel_size
-    y_scale = plain_size/y_pixel_size
+    f.write(b"P6\n%d %d\n255\n"%(x_pixel_size+1, y_pixel_size))
 
     iter_count = image_iter(O_r, O_i, plain_size/x_pixel_size, x_pixel_size)
     # print(iter_count)
@@ -68,6 +70,8 @@ def mandel_plot_ppm():
     for i in range(0, len(iter_count)):
         f.write(bytes([(iter_count[i]&1)<<7, iter_count[i]&0xFF, (255-iter_count[i])&0xFF]))
     f.close()
+    for i in range(0, 35):
+        print("%02d   %02x "%(i, iter_count[i]))
 
 mandel_plot_ppm()
 # mandel_iter(0.0, 0.0)

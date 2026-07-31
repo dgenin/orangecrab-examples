@@ -94,14 +94,14 @@ module f_iter_pipe(
             iter_1 <= 16'h0;
             r_i_prod_0 <= 32'h0;
             norm_1 = 32'h0;
-            done <= 4'd0;
+            done <= 3'd0;
             phase_counter <= 2'd0;
         end;
         case (iter_counter)
             16'hFFFF : data_valid <= 0;
             default : 
-                // if ((done != 4'd15) && (iter_counter <= 16'd800)) begin
-                if ((done != 4'd15) && (iter_counter <= 16'd5)) begin
+                if ((done != 3'd7) && (iter_counter <= 16'd800)) begin
+                // if ((done != 4'd15) && (iter_counter <= 16'd5)) begin
                     // Phase 0
                     // NOTE: See concatenation and replication operator documentation
                     r_sqr_0 <= ({ {16{res_r[15]}}, res_r[15:0] }*{ {16{res_r[15]}}, res_r[15:0] })>>>13;
@@ -123,7 +123,7 @@ module f_iter_pipe(
                     endcase
                     
                     // Phase 2
-                    if (norm_1 >= 21'h8000) begin
+                    if (norm_1 >= 32'h8000) begin
                         case (phase_counter)
                             2'd0 : if (done[1] == 0) begin iter_counter_out1 <= iter_1; done[1] <= 1; end
                             2'd1 : if (done[2] == 0) begin iter_counter_out2 <= iter_1; done[2] <= 1; end
@@ -157,12 +157,14 @@ module image_iter (
     input clk48,
 
     output reg [7:0] uart_in_data, 
-    output reg uart_in_valid,
+    output wire uart_in_valid,
     input wire [15:0] tl_r, tl_i, step, width,
     input wire start_image,
+    input wire uart_in_ready,
     output reg finished = 0
     );
 
+    wire clk48;
     reg signed [15:0] c_r = 16'hFFFF;
     reg signed [15:0] c_i [5:0];
     wire [15:0] iter_counter [5:0];
@@ -226,16 +228,19 @@ module image_iter (
                         end
                         3'd5: begin
                             c_i[5] <= p_i;
-                        end
-                        3'd6: begin
                             state <= `IMAGE_ITER_COMPUTE;
+                        end
+                        // 3'd6: begin
+                        //     state <= `IMAGE_ITER_COMPUTE;
+                        //     batch_counter <= 0;
+                        // end
+                        endcase;
+                        if (batch_counter < 5) begin
+                            batch_counter <= batch_counter + 1;
+                        end else begin
                             batch_counter <= 0;
                         end
-                        endcase;
-                        if (batch_counter < 6) begin
-                            batch_counter <= batch_counter + 1;
-                        end
-                        if (i_counter > width) begin
+                        if (i_counter >= width) begin
                             i_counter <= 0;
                             r_counter <= r_counter + 1;
                             p_r <= p_r + step;
@@ -261,9 +266,16 @@ module image_iter (
                         end
                     end
             `IMAGE_ITER_SEND: begin
-                // FIXME: Honor USB flow control flag
+                // HACK: Instead of honoring USB flow control correctly we are dropping
+                //       the first two bytes in each batch on the client side.
+                // WTF: Why is the first received twice on the client side!!!???
+                //      The README for the USB-SERIAL logic seems to state that 
+                //      uart_in_ready acts as an ACK, i.e., data is received if
+                //      uart_in_ready & uart_in_valid on the same clock cycle.
+                //      But this does not explain why the first byte (0xaa) is
+                //      received twice.
                 case (batch_counter)
-                    4'd0 : begin uart_in_data <= 8'd0; uart_in_valid <= 1; end
+                    4'd0 : begin uart_in_data <= 8'haa; uart_in_valid <= 1; end
                     4'd1 : uart_in_data <= iter_counter[0][15:8];
                     4'd2 : uart_in_data <= iter_counter[0][7:0];
                     4'd3 : uart_in_data <= iter_counter[1][15:8];
@@ -288,7 +300,7 @@ module image_iter (
                         batch_counter <= 0;
                     end
                 endcase;
-                if (batch_counter < 13) begin
+                if ((batch_counter < 13) && (uart_in_ready)) begin
                     batch_counter <= batch_counter + 1;
                 end
             end
@@ -298,14 +310,14 @@ endmodule
 
 
 module mandelbrot_uut (
-        input  clk48,
+        input clk48,
 
 		output uart_out_ready,
   		input uart_out_valid,
   		input [7:0] uart_out_data,
   
   		output wire uart_in_valid,
-  		input uart_in_ready,
+  		input wire uart_in_ready,
 		output wire [7:0] uart_in_data,
   	
         output rgb_led0_r,
@@ -313,47 +325,15 @@ module mandelbrot_uut (
         output rgb_led0_b
     );
 
-	// Code your design here
-    // Mandelbrot input registers
-    // reg signed [15:0] cr = 16'hFFFF;
-    // reg signed [15:0] ci [4:0];
-    // wire [15:0] iter_counter [4:0];
-    // wire [4:0] data_valid_in;
-    // wire [1:0] data_valid_in;
-    // reg [4:0] data_valid = 5'd0;
-    // reg [1:0] data_valid = 2'd0;
-    // reg data_ready = 0;
-    // reg start_iter = 0;
+    wire clk48;
     reg start_image = 0;
-    // reg [15:0] clock_counter = 16'd0;
     wire finished;
     reg [15:0] tl_r, tl_i, width, step;
 
-    // genvar i;
-    // generate
-    //     begin
-    //         for (i=0; i<5; i = i + 1) begin : mandel_iter_maker
-    //             f_iter mandel_iter (.clk48(clk48), .cr(cr), .ci(ci[i]), .start_iter(start_iter), .data_valid(data_valid_in[i]), .iter_counter_out(iter_counter[i]));
-    //         end
-    //     end
-    // endgenerate;
-
-    // f_iter_pipe mandel_iter_0 (.clk48(clk48), .cr0(cr), .cr1(cr), .cr2(cr), 
-    //                            .ci0(ci[0]), .ci1(ci[1]), .ci2(ci[2]),
-    //                            .start_iter(start_iter), .data_valid(data_valid_in[0]),
-    //                            .iter_counter_out0(iter_counter[0]), .iter_counter_out1(iter_counter[1]),
-    //                            .iter_counter_out2(iter_counter[2]));
-
-    // f_iter_pipe mandel_iter_1 (.clk48(clk48), .cr0(cr), .cr1(cr), .cr2(cr), 
-    //                            .ci0(ci[3]), .ci1(ci[4]), .ci2(ci[4]),
-    //                            .start_iter(start_iter), .data_valid(data_valid_in[1]),
-    //                            .iter_counter_out0(iter_counter[3]), .iter_counter_out1(iter_counter[4]),
-    //                            .iter_counter_out2(iter_counter[4]));
-
     image_iter steve (.clk48(clk48), .uart_in_data(uart_in_data), .uart_in_valid(uart_in_valid),
-                      .tl_r(tl_r), .tl_i(tl_i), .step(step), .width(width), .start_image(start_image), .finished(finished));
+                      .tl_r(tl_r), .tl_i(tl_i), .step(step), .width(width), .start_image(start_image),
+                      .uart_in_ready(uart_in_ready), .finished(finished));
     
-
     // Reader
     reg [3:0] reg_counter = 0;
     always @(posedge clk48) begin
@@ -374,67 +354,11 @@ module mandelbrot_uut (
                         width[7:0] <= uart_out_data;
                         start_image <= 1;
                     end
-                // 4'd8 : begin ci[3][15:8] <= uart_out_data; end
-                // 4'd9 : begin ci[3][7:0] <= uart_out_data; end
-                // 4'd10 : begin ci[4][15:8] <= uart_out_data; end
-                // 4'd11 : begin
-                //             ci[4][7:0] <= uart_out_data;
-                //             start_iter <= 1;
-                //         end
                 default: begin end
             endcase
             reg_counter <= reg_counter + 1;
         end
     end
-
-    // reg [3:0] out_counter = 4'd11;
-    // Output
-    // always @(posedge clk48) begin
-    //     if (start_iter)
-    //         begin
-    //             clock_counter <= 0;
-    //         end
-    //     else
-    //         begin
-    //             clock_counter <= clock_counter + 1;
-    //         end
-    //     // if (uart_in_ready && (out_counter < 4'd8)) begin
-    //     // This for-loop makes the timing but
-    //     // the naive simpler data_valid <= data_valid | data_valid_in
-    //     // does not!?
-    //     // for(int i = 0; i < 1; i = i + 1) begin
-    //     //     data_valid[i] <= data_valid[i] | data_valid_in[i];
-    //     // end
-    //     data_valid[0] <= data_valid[0] | data_valid_in[0];
-    //     data_valid[1] <= data_valid[1] | data_valid_in[1];
-    //     if (out_counter > 4'd12) begin
-    //         // if (data_valid == 5'd1) begin
-    //         if (data_valid == 2'd3) begin
-    //             out_counter <= 0;
-    //             // data_valid <= 5'd0;
-    //             data_valid <= 2'd0;
-    //         end;
-    //     end
-    //     else begin
-    //         case (out_counter)
-    //             // 1'd0 : begin uart_in_valid = 1; uart_in_data <= iter_counter[out_counter[3:1]][15:8]; end
-    //             // 1'd1 : uart_in_data <= iter_counter[out_counter[3:1]][7:0];
-    //             4'd0 : begin uart_in_data <= 8'd0; uart_in_valid = 1; end
-    //             4'd1 : uart_in_data <= iter_counter[0][15:8];
-    //             4'd2 : uart_in_data <= iter_counter[0][7:0];
-    //             4'd3 : uart_in_data <= iter_counter[1][15:8];
-    //             4'd4 : uart_in_data <= iter_counter[1][7:0];
-    //             4'd5 : uart_in_data <= iter_counter[2][15:8];
-    //             4'd6 : uart_in_data <= iter_counter[2][7:0];
-    //             4'd7 : uart_in_data <= iter_counter[3][15:8];
-    //             4'd8 : uart_in_data <= iter_counter[3][7:0];
-    //             4'd9 : uart_in_data <= iter_counter[4][15:8];
-    //             4'd10 : uart_in_data <= iter_counter[4][7:0];
-    //             4'd11 : uart_in_valid <= 0;
-    //         endcase;
-    //         out_counter <= out_counter + 1;
-    //     end;
-    // end
 
     // Tying this to 0 causes reg_counter [0] to be 0 because of the assignment on line 52
     assign rgb_led0_r = 0;
@@ -446,7 +370,6 @@ module mandelbrot_uut (
     always @(posedge clk48) begin
         ledCounter <= ledCounter + 1;
     end
-    // Why is uart_in_ready always low???
     // assign rgb_led0_g = ~data_valid;
     // assign rgb_led0_r = ~out_counter[ 1 ];
     // assign rgb_led0_b = ~out_counter[ 2 ];
