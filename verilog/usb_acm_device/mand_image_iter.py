@@ -25,9 +25,9 @@ def image_iter(tl_r: float, tl_i: float, step: float, width: int):
     for i in range(0, width):
         print("row=%d"%(i))
         b = bytes([])
-        for j in range(0, 2*width//12):
+        for j in range(0, 2*width//48):
             # Drop the first two bytes see comment in mandelbrot_uut.v around L270
-            b += ser.read(14)[2:14]
+            b += ser.read(2+48)[2:]
         # print("in data=", list(map(hex, p)))
         # print(i, " ", len(b), " ", end=" | ")
         if len(b) != 2*width:
