@@ -23,16 +23,18 @@ def image_iter(tl_r: float, tl_i: float, step: float, width: int):
     ser.write(out_data)
     p = bytes([])
     for i in range(0, width):
+        print("row=%d"%(i))
         b = bytes([])
         for j in range(0, 2*width//12):
+            # Drop the first two bytes see comment in mandelbrot_uut.v around L270
             b += ser.read(14)[2:14]
         # print("in data=", list(map(hex, p)))
-        print(i, " ", len(b), " ", end=" | ")
+        # print(i, " ", len(b), " ", end=" | ")
         if len(b) != 2*width:
             break
         p += b
         # print(b)
-    print("len(p)=", len(p))
+    # print("len(p)=", len(p))
     res = struct.unpack(">"+"H"*(len(p)>>1), p)
     return res
 
@@ -53,13 +55,13 @@ def mandel_plot():
         print()
 
 def mandel_plot_ppm():
-    plain_size = 4
-    x_pixel_size = 804
-    y_pixel_size = 804
-    # O_r = -1
-    # O_i = -0.75
-    O_r = -2
-    O_i = -2
+    plain_size = .2
+    x_pixel_size = 1080
+    y_pixel_size = 1080
+    O_r = -.6
+    O_i = -.6
+    # O_r = -2
+    # O_i = -2
     f = open("mandel.ppm", "wb")
     # f.write(b"P6\n%d %d\n255\n"%(x_pixel_size, y_pixel_size))
     f.write(b"P6\n%d %d\n255\n"%(x_pixel_size+1, y_pixel_size))

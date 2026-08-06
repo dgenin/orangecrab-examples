@@ -100,7 +100,7 @@ module f_iter_pipe(
         case (iter_counter)
             16'hFFFF : data_valid <= 0;
             default : 
-                if ((done != 3'd7) && (iter_counter <= 16'd800)) begin
+                if ((done != 3'd7) && (iter_counter <= 16'hF000)) begin
                 // if ((done != 4'd15) && (iter_counter <= 16'd5)) begin
                     // Phase 0
                     // NOTE: See concatenation and replication operator documentation
@@ -166,8 +166,8 @@ module image_iter (
 
     wire clk48;
     reg signed [15:0] c_r = 16'hFFFF;
-    reg signed [15:0] c_i [5:0];
-    wire [15:0] iter_counter [5:0];
+    reg signed [15:0] c_i [11:0];
+    wire [15:0] iter_counter [11:0];
     // width must be divisible by batch size, currently 6.
     reg [7:0] batch_counter = 0;
     reg [15:0] r_counter = 0;
@@ -179,8 +179,8 @@ module image_iter (
     reg [1:0] state = `IMAGE_ITER_IDLE;
     reg [15:0] p_r, p_i;
     reg start_iter = 0;
-    wire [1:0] data_valid_in;
-    reg [1:0] data_valid = 0;
+    wire [3:0] data_valid_in;
+    reg [3:0] data_valid = 0;
 
 
     f_iter_pipe mandel_iter_0 (.clk48(clk48), .cr0(c_r), .cr1(c_r), .cr2(c_r), 
@@ -195,6 +195,17 @@ module image_iter (
                                .iter_counter_out0(iter_counter[3]), .iter_counter_out1(iter_counter[4]),
                                .iter_counter_out2(iter_counter[5]));
 
+    f_iter_pipe mandel_iter_2 (.clk48(clk48), .cr0(c_r), .cr1(c_r), .cr2(c_r), 
+                               .ci0(c_i[6]), .ci1(c_i[7]), .ci2(c_i[8]),
+                               .start_iter(start_iter), .data_valid(data_valid_in[2]),
+                               .iter_counter_out0(iter_counter[6]), .iter_counter_out1(iter_counter[7]),
+                               .iter_counter_out2(iter_counter[8]));
+
+    f_iter_pipe mandel_iter_3 (.clk48(clk48), .cr0(c_r), .cr1(c_r), .cr2(c_r), 
+                               .ci0(c_i[9]), .ci1(c_i[10]), .ci2(c_i[11]),
+                               .start_iter(start_iter), .data_valid(data_valid_in[3]),
+                               .iter_counter_out0(iter_counter[9]), .iter_counter_out1(iter_counter[10]),
+                               .iter_counter_out2(iter_counter[11]));
     // for cr in range(0, tl_r):
     //    for ci in range(0, tl_i, 6):
     always @(posedge clk48) begin
@@ -209,25 +220,43 @@ module image_iter (
         case (state)
             `IMAGE_ITER_IDLE: begin finished <= 0; end
             `IMAGE_ITER_INIT: begin
-                    case (batch_counter[2:0]) 
-                        3'd0: begin
+                    case (batch_counter[3:0]) 
+                        4'd0: begin
                             c_r <= p_r;
                             c_i[0] <= p_i;
                         end
-                        3'd1: begin
+                        4'd1: begin
                             c_i[1] <= p_i;
                         end
-                        3'd2: begin
+                        4'd2: begin
                             c_i[2] <= p_i;
                         end
-                        3'd3: begin
+                        4'd3: begin
                             c_i[3] <= p_i;
                         end
-                        3'd4: begin
+                        4'd4: begin
                             c_i[4] <= p_i;
                         end
-                        3'd5: begin
+                        4'd5: begin
                             c_i[5] <= p_i;
+                        end
+                        4'd6: begin
+                            c_i[6] <= p_i;
+                        end
+                        4'd7: begin
+                            c_i[7] <= p_i;
+                        end
+                        4'd8: begin
+                            c_i[8] <= p_i;
+                        end
+                        4'd9: begin
+                            c_i[9] <= p_i;
+                        end
+                        4'd10: begin
+                            c_i[10] <= p_i;
+                        end
+                        4'd11: begin
+                            c_i[11] <= p_i;
                             state <= `IMAGE_ITER_COMPUTE;
                         end
                         // 3'd6: begin
@@ -235,7 +264,7 @@ module image_iter (
                         //     batch_counter <= 0;
                         // end
                         endcase;
-                        if (batch_counter < 5) begin
+                        if (batch_counter < 11) begin
                             batch_counter <= batch_counter + 1;
                         end else begin
                             batch_counter <= 0;
@@ -259,7 +288,7 @@ module image_iter (
                             start_iter <= 0;
                         end
                         data_valid <= data_valid | data_valid_in;
-                        if (data_valid == 3) begin
+                        if (data_valid == 4'hf) begin
                             state <= `IMAGE_ITER_SEND;
                             batch_counter <= 0; // Not used for batch counting here
                             data_valid <= 0;
@@ -275,20 +304,32 @@ module image_iter (
                 //      But this does not explain why the first byte (0xaa) is
                 //      received twice.
                 case (batch_counter)
-                    4'd0 : begin uart_in_data <= 8'haa; uart_in_valid <= 1; end
-                    4'd1 : uart_in_data <= iter_counter[0][15:8];
-                    4'd2 : uart_in_data <= iter_counter[0][7:0];
-                    4'd3 : uart_in_data <= iter_counter[1][15:8];
-                    4'd4 : uart_in_data <= iter_counter[1][7:0];
-                    4'd5 : uart_in_data <= iter_counter[2][15:8];
-                    4'd6 : uart_in_data <= iter_counter[2][7:0];
-                    4'd7 : uart_in_data <= iter_counter[3][15:8];
-                    4'd8 : uart_in_data <= iter_counter[3][7:0];
-                    4'd9 : uart_in_data <= iter_counter[4][15:8];
-                    4'd10 : uart_in_data <= iter_counter[4][7:0];
-                    4'd11 : uart_in_data <= iter_counter[5][15:8];
-                    4'd12 : uart_in_data <= iter_counter[5][7:0];
-                    4'd13 : begin
+                    5'd0 : begin uart_in_data <= 8'haa; uart_in_valid <= 1; end
+                    5'd1 : uart_in_data <= iter_counter[0][15:8];
+                    5'd2 : uart_in_data <= iter_counter[0][7:0];
+                    5'd3 : uart_in_data <= iter_counter[1][15:8];
+                    5'd4 : uart_in_data <= iter_counter[1][7:0];
+                    5'd5 : uart_in_data <= iter_counter[2][15:8];
+                    5'd6 : uart_in_data <= iter_counter[2][7:0];
+                    5'd7 : uart_in_data <= iter_counter[3][15:8];
+                    5'd8 : uart_in_data <= iter_counter[3][7:0];
+                    5'd9 : uart_in_data <= iter_counter[4][15:8];
+                    5'd10 : uart_in_data <= iter_counter[4][7:0];
+                    5'd11 : uart_in_data <= iter_counter[5][15:8];
+                    5'd12 : uart_in_data <= iter_counter[5][7:0];
+                    5'd13 : uart_in_data <= iter_counter[6][15:8];
+                    5'd14 : uart_in_data <= iter_counter[6][7:0];
+                    5'd15 : uart_in_data <= iter_counter[7][15:8];
+                    5'd16 : uart_in_data <= iter_counter[7][7:0];
+                    5'd17 : uart_in_data <= iter_counter[8][15:8];
+                    5'd18 : uart_in_data <= iter_counter[8][7:0];
+                    5'd19 : uart_in_data <= iter_counter[9][15:8];
+                    5'd20 : uart_in_data <= iter_counter[9][7:0];
+                    5'd21 : uart_in_data <= iter_counter[10][15:8];
+                    5'd22 : uart_in_data <= iter_counter[10][7:0];
+                    5'd23 : uart_in_data <= iter_counter[11][15:8];
+                    5'd24 : uart_in_data <= iter_counter[11][7:0];
+                    5'd25 : begin
                         uart_in_valid <= 0;
                         // if ((r_counter > width) && (i_counter > width) && (data_valid == 3)) begin
                         if ((r_counter > width) && (i_counter > width)) begin
@@ -300,7 +341,7 @@ module image_iter (
                         batch_counter <= 0;
                     end
                 endcase;
-                if ((batch_counter < 13) && (uart_in_ready)) begin
+                if ((batch_counter < 25) && (uart_in_ready)) begin
                     batch_counter <= batch_counter + 1;
                 end
             end
